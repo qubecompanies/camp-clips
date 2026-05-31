@@ -1,5 +1,3 @@
-import heic2any from 'heic2any';
-
 // ============ IMAGE PROCESSING (memory-safe) ============
 // Critical constraints (DO NOT simplify — this pipeline was rewritten
 // specifically to prevent memory explosions that crashed a dev machine):
@@ -129,6 +127,10 @@ export async function processImageFile(file: File): Promise<ProcessedImage> {
   // Step 1: get a decodable blob (HEIC needs conversion first)
   let sourceBlob: Blob = file;
   if (isHeic) {
+    // Lazy-load heic2any only when a HEIC/HEIF file is actually imported.
+    // It's a heavy dependency (~1.5 MB) and most users never touch HEIC, so
+    // keeping it out of the main bundle saves them the download entirely.
+    const { default: heic2any } = await import('heic2any');
     const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
     sourceBlob = Array.isArray(converted) ? converted[0] : converted;
   }
