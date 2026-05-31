@@ -25,6 +25,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
   const togglePhoto = useStore((s) => s.togglePhoto);
   const clearPhotos = useStore((s) => s.clearPhotos);
   const shufflePhotos = useStore((s) => s.shufflePhotos);
+  const sortPhotosByDate = useStore((s) => s.sortPhotosByDate);
   const reorderPhotos = useStore((s) => s.reorderPhotos);
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,14 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
     toast('Photos shuffled.', 'success');
   };
 
+  const handleSortByDate = () => {
+    if (photos.length < 2) {
+      toast('Add more photos to sort.', 'info');
+      return;
+    }
+    sortPhotosByDate();
+  };
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
@@ -101,6 +110,15 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
             ? `${included} of ${photos.length} included · drag to reorder · click to toggle`
             : 'No photos yet'}
         </div>
+        <button className="btn" title="Order photos by the date they were taken" onClick={handleSortByDate}>
+          <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          By Date
+        </button>
         <button className="btn" title="Randomize photo order now" onClick={handleShuffle}>
           <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="16 3 21 3 21 8" />

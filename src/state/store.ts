@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Photo, Song, Settings, TextScreen, PlaybackState } from './types';
 import { processImageFile } from '../lib/imageProcessing';
+import { readCaptureTime } from '../lib/exif';
 import { ensureAudioCtx, getGainNode } from '../lib/audioContext';
 import { isImageFile, isAudioFile, uid, shuffle } from '../lib/utils';
 import { toast } from './toastStore';
@@ -31,6 +32,7 @@ interface AppState {
   reorderPhotos: (orderedIds: string[]) => void;
   reorderSongs: (orderedIds: string[]) => void;
   shufflePhotos: () => void;
+  sortPhotosByDate: () => void;
 
   // project load
   replaceProject: (data: {
@@ -110,6 +112,10 @@ export const useStore = create<AppState>((set, get) => ({
     let failed = 0;
     for (const file of files) {
       try {
+        // Read capture time from the ORIGINAL bytes — our canvas re-encode
+        // strips EXIF, and HEIC loses it during conversion, so we must read it
+        // here before processImageFile() touches the file.
+        const capturedAt = (await readCaptureTime(file)) ?? undefined;
         const result = await processImageFile(file);
         const photo: Photo = {
           id: uid(),
@@ -119,6 +125,7 @@ export const useStore = create<AppState>((set, get) => ({
           width: result.width,
           height: result.height,
           included: true,
+          capturedAt,
         };
         set((s) => ({ photos: [...s.photos, photo] }));
         added++;
@@ -222,6 +229,24 @@ export const useStore = create<AppState>((set, get) => ({
     })),
 
   shufflePhotos: () => set((s) => ({ photos: shuffle([...s.photos]) })),
+
+  sortPhotosByDate: () => {
+    const photos = get().photos;
+    const dated = photos.filter((p) => p.capturedAt != null);
+    const undated = photos.filter((p) => p.capturedAt == null);
+    if (!dated.length) {
+      toast("Couldn't read capture dates from these photos — order unchanged.", 'error');
+      return;
+    }
+    // Ascending by capture time; undated photos keep their order at the end.
+    dated.sort((a, b) => a.capturedAt! - b.capturedAt!);
+    set({ photos: [...dated, ...undated] });
+    if (undated.length) {
+      toast(`Sorted ${dated.length} by date taken — ${undated.length} had no timestamp (moved to the end).`, 'info');
+    } else {
+      toast(`Sorted ${dated.length} photo${dated.length === 1 ? '' : 's'} by date taken.`, 'success');
+    }
+  },
 
   replaceProject: (data) =>
     set((s) => ({

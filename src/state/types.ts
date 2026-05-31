@@ -22,6 +22,7 @@ export interface Photo {
   included: boolean;
   loadError?: boolean;
   kbPlan?: KbPlan;
+  capturedAt?: number; // EXIF DateTimeOriginal (epoch ms); undefined when unreadable
 }
 
 export interface Song {
