@@ -1,0 +1,51 @@
+/* Design tokens — the source of truth for theming.
+   Light/dark toggle swaps only --bg-* / --text-* / --shadow-*.
+   Brand colors (--primary, --secondary, --accent) are invariant across themes;
+   only templates override them (via document.documentElement). The two systems
+   are deliberately decoupled — do not merge them. */
+:root {
+  /* Brand colors — invariant across themes */
+  --primary: #F59E0B;
+  --primary-hover: #FBB54A;
+  --primary-deep: #C77614;
+  --primary-dim: rgba(245, 158, 11, 0.15);
+  --secondary: #4338CA;
+  --secondary-hover: #6B5FE0;
+  --secondary-dim: rgba(67, 56, 202, 0.18);
+  --accent: #14B8A6;
+  --accent-dim: rgba(20, 184, 166, 0.15);
+  --danger: #EF4444;
+  --danger-dim: rgba(239, 68, 68, 0.15);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Dark theme (default) — Bright Studio dark UI variant */
+  --bg-base: #0F1419;
+  --bg-panel: #1A1F26;
+  --bg-elevated: #232932;
+  --bg-hover: #2D3540;
+  --border: #2D3540;
+  --border-light: #383F4A;
+  --text-primary: #FCE7B5;
+  --text-secondary: #9CA3AF;
+  --text-tertiary: #6B7280;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.5);
+}
+
+[data-theme="light"] {
+  --bg-base: #FAEDC5;
+  --bg-panel: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-hover: #FCE7B5;
+  --border: #EEE7D9;
+  --border-light: #DDD5C2;
+  --text-primary: #14181F;
+  --text-secondary: #4B5563;
+  --text-tertiary: #6B7280;
+  --shadow-sm: 0 1px 2px rgba(20, 24, 31, 0.08);
+  --shadow-md: 0 4px 12px rgba(20, 24, 31, 0.10);
+  --shadow-lg: 0 12px 32px rgba(20, 24, 31, 0.18);
+}

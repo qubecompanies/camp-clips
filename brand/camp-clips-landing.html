@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camp Clips — Slideshows Made Simple</title>
+<meta name="description" content="Drop in photos and music. Get out a slideshow. Built for Stake camps, ward events, and family reunions.">
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23F59E0B"/><circle cx="32" cy="32" r="22" fill="none" stroke="%2314181F" stroke-width="3"/><path d="M32 12 A20 20 0 0 0 12 32 L22 32 A10 10 0 0 1 32 22 Z" fill="%234338CA"/><path d="M12 32 A20 20 0 0 0 32 52 L32 42 A10 10 0 0 1 22 32 Z" fill="%2314181F"/><path d="M32 52 A20 20 0 0 0 52 32 L42 32 A10 10 0 0 1 32 42 Z" fill="%23FFFFFF"/><circle cx="32" cy="32" r="5" fill="%23F59E0B"/></svg>'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FFFFFF;
+    --paper-soft: #FCE7B5;
+    --paper-warm: #FAEDC5;
+    --ink: #14181F;
+    --ink-soft: #2D3540;
+    --primary: #F59E0B;
+    --primary-hover: #FBB54A;
+    --primary-deep: #C77614;
+    --secondary: #4338CA;
+    --secondary-hover: #6B5FE0;
+    --muted: #6B7280;
+    --rule: #EEE7D9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  html, body { overflow-x: hidden; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============================== NAV ============================== */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.78);
+    border-bottom: 1px solid var(--rule);
+  }
+  .nav-inner {
+    max-width: 1280px; margin: 0 auto;
+    padding: 16px 32px;
+    display: flex; align-items: center; gap: 20px;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    text-decoration: none; color: var(--ink);
+  }
+  .nav-mark { width: 30px; height: 30px; flex-shrink: 0; }
+  .nav-brand .name {
+    font-family: 'Fraunces', serif; font-size: 22px;
+    font-weight: 500; letter-spacing: -0.02em;
+  }
+  .nav-spacer { flex: 1; }
+  .nav-link {
+    color: var(--muted); text-decoration: none; font-size: 14px;
+    font-weight: 500; padding: 8px 12px;
+    transition: color 0.15s;
+  }
+  .nav-link:hover { color: var(--ink); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; border-radius: 8px;
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    text-decoration: none; transition: all 0.15s;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--primary); color: var(--ink); border-color: var(--primary); }
+  .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(245, 158, 11, 0.25); }
+  .btn-secondary { background: var(--secondary); color: #FFFFFF; border-color: var(--secondary); }
+  .btn-secondary:hover { background: var(--secondary-hover); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--rule); }
+  .btn-ghost:hover { background: var(--paper-soft); border-color: var(--primary-deep); }
+  .btn-large { padding: 14px 24px; font-size: 16px; border-radius: 10px; }
+
+  /* ============================== HERO ============================== */
+  .hero {
+    padding: 80px 32px 100px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--paper) 0%, var(--paper-warm) 100%);
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -240px; right: -160px;
+    width: 700px; height: 700px;
+    background: radial-gradient(circle, var(--primary) 0%, transparent 60%);
+    opacity: 0.18;
+    pointer-events: none;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -320px; left: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, var(--secondary) 0%, transparent 60%);
+    opacity: 0.12;
+    pointer-events: none;
+  }
+  .hero-inner {
+    max-width: 1280px; margin: 0 auto;
+    position: relative; z-index: 2;
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px;
+    align-items: center;
+  }
+  .hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--primary-deep); margin-bottom: 24px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .hero-eyebrow::before {
+    content: ''; width: 6px; height: 6px;
+    background: var(--primary); border-radius: 50%;
+  }
+  .hero h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(48px, 7vw, 88px); font-weight: 500;
+    letter-spacing: -0.04em; line-height: 0.95;
+    margin-bottom: 24px;
+  }
+  .hero h1 em {
+    font-style: italic; font-weight: 400; color: var(--primary-deep);
+  }
+  .hero p.lede {
+    font-size: clamp(17px, 1.6vw, 19px);
+    color: var(--ink-soft); max-width: 540px;
+    line-height: 1.55; margin-bottom: 36px;
+  }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero-meta {
+    margin-top: 36px; display: flex; gap: 28px; flex-wrap: wrap;
+    font-size: 13px; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+  .hero-meta span::before {
+    content: '✓'; color: var(--secondary); font-weight: 700;
+  }
+
+  /* hero visual — app preview chip */
+  .hero-visual {
+    position: relative;
+    perspective: 1200px;
+  }
+  .app-preview {
+    background: var(--ink);
+    border-radius: 18px;
+    box-shadow: 0 40px 80px -20px rgba(20, 24, 31, 0.4), 0 0 0 1px var(--ink-soft);
+    overflow: hidden;
+    transform: rotateY(-6deg) rotateX(2deg);
+    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .app-preview:hover { transform: rotateY(0deg) rotateX(0deg); }
+  .app-preview .app-header {
+    padding: 16px 20px;
+    background: #1A1F26;
+    border-bottom: 1px solid var(--ink-soft);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .app-preview .preview-mark { width: 28px; height: 28px; }
+  .app-preview .preview-title {
+    font-family: 'Fraunces', serif; color: #FCE7B5;
+    font-size: 17px; font-weight: 500; letter-spacing: -0.01em;
+  }
+  .app-preview .preview-actions { margin-left: auto; display: flex; gap: 8px; }
+  .app-preview .preview-btn {
+    padding: 6px 12px; border-radius: 5px; font-size: 11px; font-weight: 600;
+  }
+  .app-preview .app-body {
+    padding: 24px 20px;
+  }
+  .app-preview .preview-event {
+    color: #FCE7B5;
+    font-family: 'Fraunces', serif; font-size: 18px; font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .app-preview .preview-loc {
+    color: #888;
+    font-size: 11px; margin: 4px 0 16px;
+  }
+  .app-preview .preview-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    margin-bottom: 14px;
+  }
+  .app-preview .preview-tile {
+    aspect-ratio: 1; border-radius: 5px;
+    background: linear-gradient(135deg, #2D3540 0%, #1A1F26 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .app-preview .preview-tile::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), transparent);
+  }
+  .app-preview .preview-tile:nth-child(2)::after { background: linear-gradient(135deg, rgba(67, 56, 202, 0.15), transparent); }
+  .app-preview .preview-tile:nth-child(5)::after { background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), transparent); }
+  .app-preview .preview-tile:nth-child(7)::after { background: linear-gradient(135deg, rgba(67, 56, 202, 0.12), transparent); }
+  .app-preview .preview-progress {
+    height: 3px; background: #2D3540; border-radius: 2px;
+    overflow: hidden; margin-top: 10px;
+  }
+  .app-preview .preview-progress-fill {
+    height: 100%; width: 62%;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+  }
+
+  /* ============================== TRUST STRIP ============================== */
+  .trust {
+    padding: 40px 32px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+    text-align: center;
+  }
+  .trust p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted);
+    max-width: 800px; margin: 0 auto;
+  }
+
+  /* ============================== FEATURES ============================== */
+  .features {
+    padding: 100px 32px;
+    background: var(--paper);
+  }
+  .section-head {
+    max-width: 800px; margin: 0 auto 64px;
+    text-align: center;
+  }
+  .section-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--primary-deep); margin-bottom: 16px;
+  }
+  .section-head h2 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(34px, 5vw, 52px); font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.05;
+    margin-bottom: 16px;
+  }
+  .section-head h2 em { font-style: italic; color: var(--primary-deep); }
+  .section-head p { font-size: 16px; color: var(--muted); }
+
+  .feature-grid {
+    max-width: 1200px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  .feature {
+    padding: 36px 32px;
+    background: var(--paper-warm);
+    border-radius: 16px;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .feature:hover { transform: translateY(-4px); }
+  .feature .ftnum {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.18em;
+    color: var(--primary-deep); margin-bottom: 16px;
+  }
+  .feature-icon {
+    width: 48px; height: 48px;
+    background: var(--paper);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px;
+    color: var(--secondary);
+  }
+  .feature h3 {
+    font-family: 'Fraunces', serif; font-size: 22px;
+    font-weight: 500; letter-spacing: -0.01em; line-height: 1.2;
+    margin-bottom: 10px;
+  }
+  .feature p {
+    font-size: 14.5px; color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ============================== HOW IT WORKS ============================== */
+  .how {
+    padding: 100px 32px;
+    background: var(--ink);
+    color: #FCE7B5;
+    position: relative;
+    overflow: hidden;
+  }
+  .how::before {
+    content: '';
+    position: absolute;
+    top: -200px; right: -100px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, var(--secondary) 0%, transparent 70%);
+    opacity: 0.25;
+    pointer-events: none;
+  }
+  .how .section-head h2 { color: #FCE7B5; }
+  .how .section-head h2 em { color: var(--primary); }
+  .how .section-head p { color: rgba(252, 231, 181, 0.65); }
+  .how .section-eyebrow { color: var(--primary); }
+
+  .steps {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
+    position: relative; z-index: 2;
+  }
+  .step {
+    padding: 28px 24px;
+    background: rgba(252, 231, 181, 0.04);
+    border: 1px solid rgba(252, 231, 181, 0.1);
+    border-radius: 14px;
+  }
+  .step-num {
+    font-family: 'Fraunces', serif; font-size: 56px;
+    font-style: italic; font-weight: 400; color: var(--primary);
+    line-height: 1; margin-bottom: 14px;
+  }
+  .step h4 {
+    font-family: 'Fraunces', serif; font-size: 19px;
+    font-weight: 500; letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .step p {
+    font-size: 14px; color: rgba(252, 231, 181, 0.65);
+    line-height: 1.55;
+  }
+
+  /* ============================== CTA ============================== */
+  .cta {
+    padding: 120px 32px;
+    background: var(--paper-warm);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta::before {
+    content: '';
+    position: absolute;
+    top: -100px; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 400px;
+    background: radial-gradient(ellipse, var(--primary) 0%, transparent 60%);
+    opacity: 0.15;
+  }
+  .cta-inner {
+    max-width: 700px; margin: 0 auto;
+    position: relative; z-index: 2;
+  }
+  .cta h2 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(36px, 5vw, 58px); font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.05;
+    margin-bottom: 18px;
+  }
+  .cta h2 em { font-style: italic; color: var(--primary-deep); }
+  .cta p {
+    font-size: 17px; color: var(--ink-soft); margin-bottom: 32px;
+  }
+
+  /* ============================== FOOTER ============================== */
+  footer {
+    padding: 60px 32px 50px;
+    background: var(--ink);
+    color: rgba(252, 231, 181, 0.5);
+  }
+  .footer-inner {
+    max-width: 1280px; margin: 0 auto;
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px;
+    align-items: start;
+  }
+  .footer-brand { color: #FCE7B5; }
+  .footer-brand .footer-mark { width: 36px; height: 36px; margin-bottom: 12px; }
+  .footer-brand h4 {
+    font-family: 'Fraunces', serif; font-size: 20px;
+    font-weight: 500; letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .footer-brand .tagline {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 14px; color: rgba(252, 231, 181, 0.5);
+    margin-bottom: 14px;
+  }
+  .footer-brand p {
+    font-size: 13px; max-width: 380px; line-height: 1.6;
+  }
+  .footer-col h5 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--primary); margin-bottom: 14px; font-weight: 500;
+  }
+  .footer-col a {
+    display: block; padding: 5px 0;
+    color: rgba(252, 231, 181, 0.65);
+    text-decoration: none; font-size: 14px;
+    transition: color 0.15s;
+  }
+  .footer-col a:hover { color: #FCE7B5; }
+  .footer-bottom {
+    max-width: 1280px; margin: 48px auto 0;
+    padding-top: 32px;
+    border-top: 1px solid rgba(252, 231, 181, 0.12);
+    display: flex; justify-content: space-between; flex-wrap: wrap;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: rgba(252, 231, 181, 0.4);
+  }
+
+  @media (max-width: 900px) {
+    .nav-inner { padding: 14px 20px; gap: 12px; }
+    .nav-link { display: none; }
+    .nav-brand .name { font-size: 18px; }
+    .hero { padding: 56px 20px 70px; }
+    .hero-inner { grid-template-columns: 1fr; gap: 56px; }
+    .hero-visual { order: -1; max-width: 480px; margin: 0 auto; }
+    .hero-cta .btn { flex: 1; justify-content: center; }
+    .features, .how, .cta { padding: 64px 20px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .footer-inner { grid-template-columns: 1fr; gap: 28px; padding: 0 4px; }
+    .footer-bottom { padding: 24px 4px 0; }
+    .app-preview { transform: none; }
+  }
+  @media (max-width: 480px) {
+    .steps { grid-template-columns: 1fr; }
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="apertureBare" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3"/>
+      <path d="M32 8 A24 24 0 0 0 8 32 L20 32 A12 12 0 0 1 32 20 Z" fill="#F59E0B"/>
+      <path d="M8 32 A24 24 0 0 0 32 56 L32 44 A12 12 0 0 1 20 32 Z" fill="#4338CA"/>
+      <path d="M32 56 A24 24 0 0 0 56 32 L44 32 A12 12 0 0 1 32 44 Z" fill="currentColor"/>
+      <circle cx="32" cy="32" r="6" fill="#FFFFFF"/>
+    </symbol>
+    <symbol id="apertureBOnLight" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#F59E0B"/>
+      <circle cx="32" cy="32" r="22" fill="none" stroke="#14181F" stroke-width="3"/>
+      <path d="M32 12 A20 20 0 0 0 12 32 L22 32 A10 10 0 0 1 32 22 Z" fill="#4338CA"/>
+      <path d="M12 32 A20 20 0 0 0 32 52 L32 42 A10 10 0 0 1 22 32 Z" fill="#14181F"/>
+      <path d="M32 52 A20 20 0 0 0 52 32 L42 32 A10 10 0 0 1 32 42 Z" fill="#FFFFFF"/>
+      <circle cx="32" cy="32" r="5" fill="#F59E0B"/>
+    </symbol>
+  </defs>
+</svg>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <div class="nav-mark" style="color: var(--ink);"><svg viewBox="0 0 64 64"><use href="#apertureBare"/></svg></div>
+      <span class="name">Camp Clips</span>
+    </a>
+    <div class="nav-spacer"></div>
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#how" class="nav-link">How it works</a>
+    <a href="#" class="btn btn-primary">Open the app</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-eyebrow">Slideshows · Made Simple</div>
+      <h1>The week, <em>in one watchable show</em>.</h1>
+      <p class="lede">For Stake camps, ward events, family reunions, and every other time you have a thousand photos and ten minutes to make something that won't embarrass you on the projector.</p>
+      <div class="hero-cta">
+        <a href="#" class="btn btn-primary btn-large">Open Camp Clips →</a>
+        <a href="#how" class="btn btn-ghost btn-large">See how it works</a>
+      </div>
+      <div class="hero-meta">
+        <span>Free to use</span>
+        <span>Nothing uploads</span>
+        <span>Works on iPhone</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="app-preview">
+        <div class="app-header">
+          <div class="preview-mark" style="color: #FCE7B5;"><svg viewBox="0 0 64 64" style="width:100%;height:100%"><use href="#apertureBare"/></svg></div>
+          <div class="preview-title">Camp Clips</div>
+          <div class="preview-actions">
+            <div class="preview-btn" style="background: var(--secondary); color: #FFFFFF;">Export</div>
+            <div class="preview-btn" style="background: var(--primary); color: #14181F;">▶ Play</div>
+          </div>
+        </div>
+        <div class="app-body">
+          <div class="preview-event">Sugar Hill Stake Youth Camp</div>
+          <div class="preview-loc">Aiken, SC · June 2026 · 247 photos</div>
+          <div class="preview-grid">
+            <div class="preview-tile"></div><div class="preview-tile"></div><div class="preview-tile"></div><div class="preview-tile"></div>
+            <div class="preview-tile"></div><div class="preview-tile"></div><div class="preview-tile"></div><div class="preview-tile"></div>
+          </div>
+          <div class="preview-progress"><div class="preview-progress-fill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST -->
+<section class="trust">
+  <p>Built for Stake comms · ward leaders · family event planners · anyone who's ever been handed a SD card the night before the slideshow is due.</p>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-head">
+    <div class="section-eyebrow">Built for the night before</div>
+    <h2>Drop photos in, <em>get a slideshow out</em>.</h2>
+    <p>No timeline. No keyframes. No subscription. Pick what you've got, set how long the show should be, and Camp Clips builds the rest.</p>
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature">
+      <div class="ftnum">01</div>
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><polyline points="21 15 16 10 5 21"/></svg>
+      </div>
+      <h3>Drop a folder of photos.</h3>
+      <p>Drag in 50 or 500 — Camp Clips downscales and orders them automatically. HEIC from iPhone, JPG from a Canon, mixed batches all work. Drop them once.</p>
+    </div>
+
+    <div class="feature">
+      <div class="ftnum">02</div>
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <h3>Add a few songs.</h3>
+      <p>Pick MP3s from your phone or laptop. Music plays through as the slideshow runs — loops if it's shorter, fades if it's longer. Match the show length to the music with one click.</p>
+    </div>
+
+    <div class="feature">
+      <div class="ftnum">03</div>
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+      <h3>Hit play. Or export.</h3>
+      <p>Full-screen playback runs on the projector tonight. Export to MP4 to share later. Cinematic zoom-and-pan motion on every photo, automatically — no editing skills required.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="section-head">
+    <div class="section-eyebrow">How it works</div>
+    <h2>From SD card to projector <em>in fifteen minutes</em>.</h2>
+    <p>Built for the realistic workflow — the one where photos arrived ten minutes ago and the show starts in twenty.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">i.</div>
+      <h4>Open the app.</h4>
+      <p>campclips.qubecompanies.com loads in any browser. Nothing to install.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">ii.</div>
+      <h4>Drop photos &amp; songs.</h4>
+      <p>From your phone, your laptop, or a folder you synced from Google Drive.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">iii.</div>
+      <h4>Pick how long.</h4>
+      <p>Time limit, match-the-music, or every photo. Shuffle is one tap.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">iv.</div>
+      <h4>Play or export.</h4>
+      <p>Full-screen on the projector, or render to MP4 and share later.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-inner">
+    <h2>It's <em>free</em>, and it's ready.</h2>
+    <p>Built by Qube Companies — no subscription, no upload, no watermark. Just open the link.</p>
+    <a href="#" class="btn btn-primary btn-large">Open Camp Clips →</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-mark" style="color: #FCE7B5;"><svg viewBox="0 0 64 64"><use href="#apertureBare"/></svg></div>
+      <h4>Camp Clips</h4>
+      <div class="tagline">Slideshows · Made Simple</div>
+      <p>A Qube Companies product. Built for Stake camps, ward events, and family reunions — by a guy who's been stuck doing the slideshow the night before, too.</p>
+    </div>
+    <div class="footer-col">
+      <h5>Product</h5>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#">Open the app</a>
+    </div>
+    <div class="footer-col">
+      <h5>Qube</h5>
+      <a href="https://qubecompanies.com">Qube Companies</a>
+      <a href="#">Contact</a>
+      <a href="#">Privacy</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Qube Companies</span>
+    <span>campclips.qubecompanies.com</span>
+  </div>
+</footer>
+
+</body>
+</html>

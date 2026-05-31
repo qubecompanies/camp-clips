@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camp Clips — Identity Package</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FFFFFF;
+    --paper-soft: #FCE7B5;
+    --ink: #14181F;
+    --primary: #F59E0B;
+    --primary-deep: #C77614;
+    --secondary: #4338CA;
+    --muted: #6B7280;
+    --rule: #EEE7D9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: hidden; }
+  body {
+    background: var(--paper-soft);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 80px;
+  }
+
+  /* HERO */
+  .hero { padding: 60px 40px 40px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+  .hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--primary-deep); margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-family: 'Fraunces', serif; font-size: clamp(36px, 5vw, 56px);
+    font-weight: 500; line-height: 1; letter-spacing: -0.03em;
+    margin-bottom: 18px; max-width: 800px;
+  }
+  .hero h1 em { font-style: italic; font-weight: 400; color: var(--primary-deep); }
+  .hero p { max-width: 620px; font-size: 15px; color: var(--muted); }
+
+  /* SECTION */
+  .section { max-width: 1300px; margin: 60px auto 0; padding: 0 40px; }
+  .section-title {
+    display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: baseline;
+    margin-bottom: 28px;
+  }
+  .section-title .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; color: var(--primary-deep);
+  }
+  .section-title h2 {
+    font-family: 'Fraunces', serif; font-size: 32px;
+    font-weight: 500; letter-spacing: -0.02em;
+  }
+  .section-title p {
+    grid-column: 2; font-size: 14px; color: var(--muted); margin-top: 4px;
+  }
+
+  /* PANEL */
+  .panel {
+    background: var(--paper);
+    border-radius: 16px;
+    box-shadow: 0 18px 40px -16px rgba(20, 24, 31, 0.18);
+    overflow: hidden;
+  }
+  .panel-head {
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--rule);
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  .panel-head .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--primary-deep); padding: 3px 8px;
+    background: var(--paper-soft); border-radius: 4px;
+  }
+  .panel-head h3 {
+    font-family: 'Fraunces', serif; font-size: 22px;
+    font-weight: 500; letter-spacing: -0.01em;
+  }
+  .panel-head p {
+    font-size: 13px; color: var(--muted); margin-left: auto;
+  }
+
+  /* APP ICON GRID — all sizes */
+  .icon-sizes-row {
+    padding: 40px;
+    background: var(--paper);
+    display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-end; justify-content: center;
+  }
+  .icon-size {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .icon-size .size-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* base icon — B variant (amber) */
+  .app-icon {
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  }
+  .app-icon svg { width: 60%; height: 60%; }
+  .app-icon-alt {
+    background: var(--secondary);
+  }
+
+  /* iOS-shaped squircles using radius */
+  .icon-512 { width: 256px; height: 256px; border-radius: 56px; }
+  .icon-512 svg { width: 60%; height: 60%; }
+  .icon-180 { width: 180px; height: 180px; border-radius: 40px; }
+  .icon-152 { width: 152px; height: 152px; border-radius: 34px; }
+  .icon-120 { width: 120px; height: 120px; border-radius: 26px; }
+  .icon-96 { width: 96px; height: 96px; border-radius: 21px; }
+  .icon-64 { width: 64px; height: 64px; border-radius: 14px; }
+  .icon-32 { width: 32px; height: 32px; border-radius: 7px; }
+  .icon-16 { width: 16px; height: 16px; border-radius: 3.5px; }
+
+  /* PALETTE SWATCHES */
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--rule);
+  }
+  .swatch {
+    aspect-ratio: 1.3 / 1;
+    padding: 18px 16px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .swatch .role { opacity: 0.7; }
+  .swatch .hex { font-size: 11px; font-weight: 500; }
+
+  /* TYPE SAMPLES */
+  .type-table {
+    padding: 32px 40px;
+    background: var(--paper);
+  }
+  .type-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+    gap: 24px;
+  }
+  .type-row:last-child { border-bottom: none; }
+  .type-role {
+    font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .t-display { font-family: 'Fraunces', serif; }
+  .t-display em { font-style: italic; font-weight: 400; color: var(--primary-deep); }
+  .t-body { font-family: 'Inter', sans-serif; }
+  .t-mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* LOCKUP DEMO */
+  .lockup-row {
+    padding: 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .lockup-box {
+    padding: 40px 32px;
+    border-right: 1px solid var(--rule);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px;
+  }
+  .lockup-box:last-child { border-right: none; }
+  .lockup-box.bg-dark { background: var(--ink); border-right-color: var(--ink); }
+  .lockup {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .lockup .mark { width: 52px; height: 52px; flex-shrink: 0; }
+  .lockup .wordmark {
+    font-family: 'Fraunces', serif; font-size: 28px;
+    font-weight: 500; letter-spacing: -0.02em; line-height: 1;
+  }
+  .lockup .subline {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); display: block; margin-top: 5px;
+  }
+
+  /* OG SOCIAL CARD */
+  .og-wrap { padding: 40px; background: var(--paper); display: flex; justify-content: center; }
+  .og-card {
+    width: 100%;
+    max-width: 1200px;
+    aspect-ratio: 1200 / 630;
+    background: linear-gradient(135deg, #14181F 0%, #1A1F26 50%, #2D2B5C 100%);
+    border-radius: 18px;
+    padding: 64px 72px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  }
+  .og-card::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+    opacity: 0.18;
+  }
+  .og-card .og-head {
+    display: flex; align-items: center; gap: 18px;
+    position: relative; z-index: 2;
+  }
+  .og-card .og-mark { width: 56px; height: 56px; }
+  .og-card .og-brand {
+    font-family: 'Fraunces', serif; font-size: 26px; font-weight: 500;
+    letter-spacing: -0.02em; color: #FCE7B5;
+  }
+  .og-card h2 {
+    font-family: 'Fraunces', serif; font-size: 64px; font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.05; color: #FCE7B5;
+    max-width: 800px; position: relative; z-index: 2;
+  }
+  .og-card h2 em { font-style: italic; color: var(--primary); }
+  .og-card .og-foot {
+    display: flex; align-items: baseline; justify-content: space-between;
+    color: rgba(252, 231, 181, 0.65); font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; letter-spacing: 0.15em; text-transform: uppercase;
+    position: relative; z-index: 2;
+  }
+
+  /* README HERO */
+  .readme-wrap { padding: 40px; background: var(--paper); }
+  .readme-card {
+    background: #14181F;
+    border-radius: 14px;
+    padding: 56px 64px;
+    color: #FCE7B5;
+    display: flex; align-items: center; gap: 36px;
+  }
+  .readme-card .rmark { width: 96px; height: 96px; flex-shrink: 0; }
+  .readme-card h2 {
+    font-family: 'Fraunces', serif; font-size: 48px; font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.05;
+  }
+  .readme-card h2 em { font-style: italic; color: var(--primary); }
+  .readme-card p {
+    font-family: 'Inter', sans-serif; font-size: 15px;
+    color: rgba(252, 231, 181, 0.65); margin-top: 8px;
+  }
+
+  /* VOICE EXAMPLES */
+  .voice-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    padding: 28px 40px;
+    gap: 20px 32px;
+  }
+  .voice-do, .voice-dont {
+    padding: 20px 22px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .voice-do {
+    background: rgba(67, 56, 202, 0.06);
+    border-left: 3px solid var(--secondary);
+  }
+  .voice-dont {
+    background: rgba(239, 68, 68, 0.06);
+    border-left: 3px solid #EF4444;
+  }
+  .voice-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    margin-bottom: 8px; font-weight: 500;
+  }
+  .voice-do .voice-label { color: var(--secondary); }
+  .voice-dont .voice-label { color: #EF4444; }
+  .voice-text { color: var(--ink); }
+  .voice-text strong { font-family: 'Fraunces', serif; font-weight: 500; font-style: italic; }
+
+  /* CLEAR / NOT TABLE */
+  .principles {
+    padding: 32px 40px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px;
+  }
+  .principle {
+    padding: 22px;
+    border-radius: 10px;
+    background: var(--paper-soft);
+  }
+  .principle .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.18em; color: var(--primary-deep);
+    margin-bottom: 8px;
+  }
+  .principle h4 {
+    font-family: 'Fraunces', serif; font-size: 18px;
+    font-weight: 500; letter-spacing: -0.01em; margin-bottom: 8px;
+  }
+  .principle p {
+    font-size: 13px; color: var(--ink); line-height: 1.55;
+  }
+
+  @media (max-width: 800px) {
+    .section { padding: 0 16px; }
+    .section-title { grid-template-columns: 1fr; gap: 6px; }
+    .section-title p { grid-column: 1; }
+    .panel-head { padding: 18px 22px; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .panel-head p { margin-left: 0; }
+    .icon-sizes-row { padding: 28px 16px; gap: 24px; }
+    .icon-512 { width: 160px; height: 160px; border-radius: 36px; }
+    .icon-180 { width: 120px; height: 120px; border-radius: 28px; }
+    .icon-152 { width: 96px; height: 96px; border-radius: 22px; }
+    .icon-120 { width: 80px; height: 80px; border-radius: 18px; }
+    .palette-grid { grid-template-columns: repeat(5, 1fr); }
+    .swatch { padding: 12px 8px; aspect-ratio: 1; }
+    .swatch .role, .swatch .hex { font-size: 9px; }
+    .lockup-row { grid-template-columns: 1fr; padding: 16px; }
+    .lockup-box { border-right: none; border-bottom: 1px solid var(--rule); padding: 28px 20px; min-height: 140px; }
+    .lockup-box.bg-dark { border-bottom-color: var(--ink); }
+    .lockup .wordmark { font-size: 22px; }
+    .og-wrap, .readme-wrap, .type-table { padding: 20px 16px; }
+    .og-card { padding: 28px 24px; }
+    .og-card h2 { font-size: 28px; }
+    .og-card .og-brand { font-size: 18px; }
+    .og-card .og-foot { font-size: 10px; }
+    .readme-card { padding: 28px 24px; flex-direction: column; align-items: flex-start; gap: 18px; text-align: left; }
+    .readme-card .rmark { width: 64px; height: 64px; }
+    .readme-card h2 { font-size: 28px; }
+    .voice-grid { grid-template-columns: 1fr; padding: 18px 16px; }
+    .principles { grid-template-columns: 1fr; padding: 18px 16px; }
+    .type-row { grid-template-columns: 1fr; gap: 6px; }
+    .hero { padding: 50px 24px 32px; }
+  }
+</style>
+
+<!-- The reusable aperture SVG — B variant (amber field, primary) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="apertureB" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#F59E0B"/>
+      <circle cx="32" cy="32" r="22" fill="none" stroke="#14181F" stroke-width="3"/>
+      <path d="M32 12 A20 20 0 0 0 12 32 L22 32 A10 10 0 0 1 32 22 Z" fill="#4338CA"/>
+      <path d="M12 32 A20 20 0 0 0 32 52 L32 42 A10 10 0 0 1 22 32 Z" fill="#14181F"/>
+      <path d="M32 52 A20 20 0 0 0 52 32 L42 32 A10 10 0 0 1 32 42 Z" fill="#FFFFFF"/>
+      <circle cx="32" cy="32" r="5" fill="#F59E0B"/>
+    </symbol>
+    <symbol id="apertureA" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#4338CA"/>
+      <circle cx="32" cy="32" r="22" fill="none" stroke="#FCE7B5" stroke-width="3"/>
+      <path d="M32 12 A20 20 0 0 0 12 32 L22 32 A10 10 0 0 1 32 22 Z" fill="#F59E0B"/>
+      <path d="M12 32 A20 20 0 0 0 32 52 L32 42 A10 10 0 0 1 22 32 Z" fill="#FCE7B5"/>
+      <path d="M32 52 A20 20 0 0 0 52 32 L42 32 A10 10 0 0 1 32 42 Z" fill="#FFFFFF"/>
+      <circle cx="32" cy="32" r="5" fill="#4338CA"/>
+    </symbol>
+    <!-- Bare mark (no background, for use on existing surfaces) -->
+    <symbol id="apertureBare" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3"/>
+      <path d="M32 8 A24 24 0 0 0 8 32 L20 32 A12 12 0 0 1 32 20 Z" fill="#F59E0B"/>
+      <path d="M8 32 A24 24 0 0 0 32 56 L32 44 A12 12 0 0 1 20 32 Z" fill="#4338CA"/>
+      <path d="M32 56 A24 24 0 0 0 56 32 L44 32 A12 12 0 0 1 32 44 Z" fill="currentColor"/>
+      <circle cx="32" cy="32" r="6" fill="#FFFFFF"/>
+    </symbol>
+  </defs>
+</svg>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">Camp Clips · Identity Package</div>
+  <h1>The brand, <em>in one place</em>.</h1>
+  <p>Every reusable asset for Camp Clips — app icons at every size, the favicon, social card, README hero, and the rules that hold it together. One source of truth so the brand stays consistent everywhere it shows up.</p>
+</section>
+
+<!-- ===================== APP ICONS — primary (B) ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">01</div>
+    <h2>App icon · primary (B · Amber Field)</h2>
+    <p>The one used in the App Store, on iOS home screens, in browser tabs, and on the OAuth consent screen. Same artwork at every size — render to PNG at the size labeled. iOS auto-rounds; the squircle radius shown is a guideline for systems that need explicit corners.</p>
+  </div>
+  <div class="panel">
+    <div class="panel-head">
+      <div class="label">Primary</div>
+      <h3>Amber Field</h3>
+      <p>Brand-primary background, indigo blade hero</p>
+    </div>
+    <div class="icon-sizes-row">
+      <div class="icon-size"><div class="app-icon icon-512"><svg><use href="#apertureB"/></svg></div><div class="size-label">512 · App Store</div></div>
+      <div class="icon-size"><div class="app-icon icon-180"><svg><use href="#apertureB"/></svg></div><div class="size-label">180 · iOS @3x</div></div>
+      <div class="icon-size"><div class="app-icon icon-152"><svg><use href="#apertureB"/></svg></div><div class="size-label">152 · iPad</div></div>
+      <div class="icon-size"><div class="app-icon icon-120"><svg><use href="#apertureB"/></svg></div><div class="size-label">120 · iOS @2x</div></div>
+      <div class="icon-size"><div class="app-icon icon-96"><svg><use href="#apertureB"/></svg></div><div class="size-label">96 · Android</div></div>
+      <div class="icon-size"><div class="app-icon icon-64"><svg><use href="#apertureB"/></svg></div><div class="size-label">64</div></div>
+      <div class="icon-size"><div class="app-icon icon-32"><svg><use href="#apertureB"/></svg></div><div class="size-label">32 · Tab</div></div>
+      <div class="icon-size"><div class="app-icon icon-16"><svg><use href="#apertureB"/></svg></div><div class="size-label">16 · Favicon</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== APP ICONS — alternate (A) ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">02</div>
+    <h2>App icon · alternate (A · Indigo Field)</h2>
+    <p>The cooler, more "tech-y" variant. Use for social cards, marketing materials, blog posts, or anywhere you want a more modern read. Same mark geometry — just inverted color.</p>
+  </div>
+  <div class="panel">
+    <div class="panel-head">
+      <div class="label">Alternate</div>
+      <h3>Indigo Field</h3>
+      <p>Brand-secondary background, amber blade hero</p>
+    </div>
+    <div class="icon-sizes-row">
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-512"><svg><use href="#apertureA"/></svg></div><div class="size-label">512</div></div>
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-180"><svg><use href="#apertureA"/></svg></div><div class="size-label">180</div></div>
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-120"><svg><use href="#apertureA"/></svg></div><div class="size-label">120</div></div>
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-96"><svg><use href="#apertureA"/></svg></div><div class="size-label">96</div></div>
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-64"><svg><use href="#apertureA"/></svg></div><div class="size-label">64</div></div>
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-32"><svg><use href="#apertureA"/></svg></div><div class="size-label">32</div></div>
+      <div class="icon-size"><div class="app-icon app-icon-alt icon-16"><svg><use href="#apertureA"/></svg></div><div class="size-label">16</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== LOCKUP ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">03</div>
+    <h2>Lockup</h2>
+    <p>The wordmark + mark pairing. Use the bare mark when the icon needs to sit on a brand-colored surface (button, badge, sticker). Use the lockup in headers, footers, and signatures.</p>
+  </div>
+  <div class="panel">
+    <div class="lockup-row">
+      <div class="lockup-box">
+        <div class="lockup">
+          <div class="mark" style="color: #14181F;"><svg viewBox="0 0 64 64"><use href="#apertureBare"/></svg></div>
+          <div>
+            <div class="wordmark" style="color: #14181F;">Camp Clips</div>
+            <div class="subline">Slideshows · Made Simple</div>
+          </div>
+        </div>
+      </div>
+      <div class="lockup-box bg-dark">
+        <div class="lockup">
+          <div class="mark" style="color: #FCE7B5;"><svg viewBox="0 0 64 64"><use href="#apertureBare"/></svg></div>
+          <div>
+            <div class="wordmark" style="color: #FCE7B5;">Camp Clips</div>
+            <div class="subline" style="color: #888;">Slideshows · Made Simple</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PALETTE ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">04</div>
+    <h2>Palette</h2>
+    <p>Bright Studio. Amber and indigo lead; ink and paper are workhorses. Wash is for soft backgrounds and dim accents.</p>
+  </div>
+  <div class="panel">
+    <div class="palette-grid">
+      <div class="swatch" style="background: #F59E0B; color: #14181F;"><span class="role">Primary</span><span class="hex">#F59E0B</span></div>
+      <div class="swatch" style="background: #4338CA; color: #FFFFFF;"><span class="role">Secondary</span><span class="hex">#4338CA</span></div>
+      <div class="swatch" style="background: #14181F; color: #FFFFFF;"><span class="role">Ink</span><span class="hex">#14181F</span></div>
+      <div class="swatch" style="background: #FFFFFF; color: #14181F; border-right: 1px solid #EEE7D9;"><span class="role">Paper</span><span class="hex">#FFFFFF</span></div>
+      <div class="swatch" style="background: #FCE7B5; color: #14181F;"><span class="role">Wash</span><span class="hex">#FCE7B5</span></div>
+    </div>
+    <div style="padding: 24px 40px; font-size: 13px; color: var(--muted); line-height: 1.6;">
+      <strong style="color: var(--ink);">Usage:</strong> Primary on key CTAs and the mark. Secondary on supporting actions and brand moments. Ink for text on light surfaces and as the dark product UI base. Paper as the brand background; Wash as light-mode body and soft accent.
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TYPOGRAPHY ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">05</div>
+    <h2>Typography</h2>
+    <p>Fraunces for character, Inter for clarity, JetBrains Mono for metadata. Three families, one system.</p>
+  </div>
+  <div class="panel">
+    <div class="type-table">
+      <div class="type-row">
+        <div class="type-role">Display XL · Fraunces 500</div>
+        <div class="t-display" style="font-size: 56px; line-height: 1; letter-spacing: -0.03em;">Camp Clips</div>
+      </div>
+      <div class="type-row">
+        <div class="type-role">Display L · Fraunces 500</div>
+        <div class="t-display" style="font-size: 36px; line-height: 1.05; letter-spacing: -0.02em;">The week, <em>in one watchable show</em>.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-role">Heading · Fraunces 500</div>
+        <div class="t-display" style="font-size: 22px; font-weight: 500;">Sugar Hill Stake · Youth Camp 2026</div>
+      </div>
+      <div class="type-row">
+        <div class="type-role">Body L · Inter 400</div>
+        <div class="t-body" style="font-size: 17px; color: var(--ink);">Drop your photos and music in, pick a stop condition, and Camp Clips builds the slideshow for you.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-role">Body · Inter 400</div>
+        <div class="t-body" style="font-size: 14px; color: var(--muted);">Photos and music never leave your browser. There is no upload step. Everything runs locally on the device you're using.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-role">Eyebrow · JetBrains Mono 500</div>
+        <div class="t-mono" style="font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--primary-deep);">By Qube Companies</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== OG SOCIAL CARD ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">06</div>
+    <h2>Social card (1200×630)</h2>
+    <p>What people see when campclips.qubecompanies.com is shared on Twitter, Facebook, LinkedIn, iMessage. Screenshot this section and use as the og:image.</p>
+  </div>
+  <div class="panel">
+    <div class="og-wrap">
+      <div class="og-card">
+        <div class="og-head">
+          <div class="og-mark"><svg viewBox="0 0 64 64" style="width:100%;height:100%"><use href="#apertureBare" style="color:#FCE7B5"/></svg></div>
+          <div class="og-brand">Camp Clips</div>
+        </div>
+        <h2>The week, <em>in one watchable show</em>.</h2>
+        <div class="og-foot">
+          <span>campclips.qubecompanies.com</span>
+          <span>By Qube</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== README HERO ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">07</div>
+    <h2>README hero</h2>
+    <p>Top banner for the GitHub repo README. Screenshot this section and commit as <code style="font-family: 'JetBrains Mono'; font-size: 12px; color: var(--secondary); background: var(--paper-soft); padding: 1px 6px; border-radius: 3px;">docs/hero.png</code>.</p>
+  </div>
+  <div class="panel">
+    <div class="readme-wrap">
+      <div class="readme-card">
+        <div class="rmark"><svg viewBox="0 0 64 64" style="width:100%;height:100%"><use href="#apertureBare" style="color:#FCE7B5"/></svg></div>
+        <div>
+          <h2>Camp Clips</h2>
+          <p style="font-family: 'Fraunces', serif; font-style: italic; font-size: 17px; margin-top: 4px;">Slideshows · Made Simple</p>
+          <p>Drop in photos and music. Get out a slideshow. Built by Qube Companies for Stake camps, ward events, and family reunions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== VOICE ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">08</div>
+    <h2>Voice · warm + plainspoken</h2>
+    <p>Microcopy guidelines. The brand sounds like a calm friend who's done this before — never corporate, never cute, never apologetic.</p>
+  </div>
+  <div class="panel">
+    <div class="voice-grid">
+      <div class="voice-do">
+        <div class="voice-label">Do</div>
+        <div class="voice-text">"Add some photos to get started."</div>
+      </div>
+      <div class="voice-dont">
+        <div class="voice-label">Don't</div>
+        <div class="voice-text">"No photos detected in workspace."</div>
+      </div>
+
+      <div class="voice-do">
+        <div class="voice-label">Do</div>
+        <div class="voice-text">"That HEIC file didn't convert. You can try saving as a JPG instead."</div>
+      </div>
+      <div class="voice-dont">
+        <div class="voice-label">Don't</div>
+        <div class="voice-text">"ERROR: heic2any conversion failed (code 0x42)."</div>
+      </div>
+
+      <div class="voice-do">
+        <div class="voice-label">Do</div>
+        <div class="voice-text">"Photos shuffled — hit Play to see the new order."</div>
+      </div>
+      <div class="voice-dont">
+        <div class="voice-label">Don't</div>
+        <div class="voice-text">"Operation completed successfully."</div>
+      </div>
+
+      <div class="voice-do">
+        <div class="voice-label">Do</div>
+        <div class="voice-text">"Match music length needs songs first."</div>
+      </div>
+      <div class="voice-dont">
+        <div class="voice-label">Don't</div>
+        <div class="voice-text">"Please add audio files to proceed with this option."</div>
+      </div>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="num">01</div>
+        <h4>Use contractions.</h4>
+        <p>"It's", "won't", "you'll". Anything else sounds like a help-desk script.</p>
+      </div>
+      <div class="principle">
+        <div class="num">02</div>
+        <h4>Be specific.</h4>
+        <p>Not "An error occurred" — "That HEIC photo didn't convert." Tell people what happened and what to try.</p>
+      </div>
+      <div class="principle">
+        <div class="num">03</div>
+        <h4>Skip the apology.</h4>
+        <p>No "Sorry!" or "Unfortunately…" — just say what went wrong and how to move forward.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== USAGE RULES ===================== -->
+<section class="section">
+  <div class="section-title">
+    <div class="num">09</div>
+    <h2>Usage rules</h2>
+    <p>Things to never do with the brand, however tempting.</p>
+  </div>
+  <div class="panel">
+    <div class="principles">
+      <div class="principle" style="background: rgba(239, 68, 68, 0.08);">
+        <div class="num" style="color: #EF4444;">Don't</div>
+        <h4>Skew or rotate the mark.</h4>
+        <p>The aperture geometry is exact. Never stretch, skew, rotate, or recolor outside the palette.</p>
+      </div>
+      <div class="principle" style="background: rgba(239, 68, 68, 0.08);">
+        <div class="num" style="color: #EF4444;">Don't</div>
+        <h4>Use a gradient on the mark.</h4>
+        <p>Solid colors only. The original three-blade design relies on flat color contrast.</p>
+      </div>
+      <div class="principle" style="background: rgba(239, 68, 68, 0.08);">
+        <div class="num" style="color: #EF4444;">Don't</div>
+        <h4>Place the mark on busy photos.</h4>
+        <p>Always use a solid amber, indigo, ink, or paper background. If you need it on a photo, put it in a colored chip first.</p>
+      </div>
+      <div class="principle">
+        <div class="num">Do</div>
+        <h4>Add clear space.</h4>
+        <p>Always leave clear space around the mark equal to 25% of its width on every side.</p>
+      </div>
+      <div class="principle">
+        <div class="num">Do</div>
+        <h4>Lead with one color.</h4>
+        <p>In any layout, one of amber/indigo dominates. Never split them 50/50 — pick a hero.</p>
+      </div>
+      <div class="principle">
+        <div class="num">Do</div>
+        <h4>Use italic Fraunces for accent.</h4>
+        <p>The italic-on-the-tagline is a signature moment. "Slideshows <em>Made Simple</em>."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<section class="section">
+  <div style="padding: 60px 40px 0; border-top: 2px solid var(--ink); margin-top: 60px;">
+    <p style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--primary-deep); margin-bottom: 12px;">Camp Clips · v1.0 brand</p>
+    <p style="font-family: 'Fraunces', serif; font-size: 22px; font-weight: 500; line-height: 1.4; letter-spacing: -0.01em; max-width: 600px;">
+      Built by Qube Companies · campclips.qubecompanies.com
+    </p>
+    <p style="font-size: 13px; color: var(--muted); margin-top: 12px; max-width: 600px;">
+      Save this file. Screenshot the assets you need. The mark is recoverable from the SVG symbols at the top of this document.
+    </p>
+  </div>
+</section>
+
+</body>
+</html>
