@@ -8,7 +8,7 @@ const Editor = lazy(() => import('./pages/Editor'));
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Landing />} />

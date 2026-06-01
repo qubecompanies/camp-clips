@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStore } from '../state/store';
 import { Slider } from './controls';
 import { SettingsPanel } from './SettingsPanel';
 import { SongList } from './SongList';
 import { applyTemplate } from '../lib/templates';
+import { loadMusicManifest } from '../lib/musicLibrary';
+import { fmtTime } from '../lib/utils';
+import type { MusicManifest, LibraryTrack } from '../state/types';
 
 type Tab = 'setup' | 'music' | 'settings';
 
@@ -153,6 +156,102 @@ function SetupPanel() {
         The intro plays at the start of the slideshow. The outro plays at the end. Leave either field blank to skip
         that screen.
       </div>
+
+      <SectionCardsPanel />
+    </div>
+  );
+}
+
+function SectionCardsPanel() {
+  const photos = useStore((s) => s.photos);
+  const sections = useStore((s) => s.sections);
+  const updateSection = useStore((s) => s.updateSection);
+  const removeSection = useStore((s) => s.removeSection);
+
+  if (!sections.length) {
+    return (
+      <div className="panel-section">
+        <label className="panel-label">Section Cards</label>
+        <div className="panel-help" style={{ marginTop: 0 }}>
+          Break the show into chapters. Hover any photo in the grid and tap the{' '}
+          <svg
+            className="inline-hint-icon"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <line x1="4" y1="12" x2="14" y2="12" />
+            <line x1="4" y1="17" x2="11" y2="17" />
+          </svg>{' '}
+          button to insert a title card before it. (Section cards show in normal order — they're skipped when photos
+          are shuffled or looped.)
+        </div>
+      </div>
+    );
+  }
+
+  // Order the editor list to match slideshow order (by anchor photo position).
+  const indexOf = new Map(photos.map((p, i) => [p.id, i]));
+  const ordered = [...sections].sort(
+    (a, b) => (indexOf.get(a.beforePhotoId) ?? 1e9) - (indexOf.get(b.beforePhotoId) ?? 1e9),
+  );
+
+  return (
+    <div className="panel-section">
+      <label className="panel-label">Section Cards</label>
+      <div className="section-card-list">
+        {ordered.map((card) => {
+          const anchor = photos.find((p) => p.id === card.beforePhotoId);
+          const anchorIndex = indexOf.get(card.beforePhotoId);
+          return (
+            <div className="section-card-item" key={card.id}>
+              <div className="section-card-anchor">
+                {anchor && <img src={anchor.url} alt="" />}
+                <span className="section-card-pos">
+                  Before #{anchorIndex != null ? anchorIndex + 1 : '?'}
+                </span>
+                <button
+                  className="section-card-remove"
+                  title="Remove section card"
+                  onClick={() => removeSection(card.id)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <input
+                type="text"
+                className="input mb-12"
+                placeholder="Section title — e.g. Day Two"
+                value={card.title}
+                onChange={(e) => updateSection(card.id, { title: e.target.value })}
+              />
+              <input
+                type="text"
+                className="input mb-12"
+                placeholder="Subtitle (optional)"
+                value={card.subtitle}
+                onChange={(e) => updateSection(card.id, { subtitle: e.target.value })}
+              />
+              <Slider
+                label="Duration"
+                min={2}
+                max={10}
+                step={0.5}
+                value={card.duration}
+                display={card.duration.toFixed(1) + 's'}
+                onChange={(v) => updateSection(card.id, { duration: v })}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -160,29 +259,159 @@ function SetupPanel() {
 function MusicPanel() {
   const addSongs = useStore((s) => s.addSongs);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [view, setView] = useState<'mine' | 'library'>('mine');
 
   return (
     <div className="panel active" id="panel-music">
       <div className="panel-section">
-        <button className="btn btn-block mb-12" onClick={() => inputRef.current?.click()}>
-          <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add Songs
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          className="file-input"
-          accept="audio/*,audio/mpeg,audio/mp3,audio/mp4,audio/wav,audio/x-wav,audio/x-m4a,audio/aac,audio/ogg,audio/flac,.mp3,.m4a,.wav,.aac,.ogg,.flac,.mp4"
-          multiple
-          onChange={(e) => {
-            if (e.target.files) addSongs(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <SongList />
+        <div className="music-source-toggle mb-12">
+          <button
+            className={'btn music-source-btn' + (view === 'mine' ? ' active' : '')}
+            onClick={() => setView('mine')}
+          >
+            My Songs
+          </button>
+          <button
+            className={'btn music-source-btn' + (view === 'library' ? ' active' : '')}
+            onClick={() => setView('library')}
+          >
+            Browse Library
+          </button>
+        </div>
+
+        {view === 'mine' ? (
+          <>
+            <button className="btn btn-block mb-12" onClick={() => inputRef.current?.click()}>
+              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Songs
+            </button>
+            <input
+              ref={inputRef}
+              type="file"
+              className="file-input"
+              accept="audio/*,audio/mpeg,audio/mp3,audio/mp4,audio/wav,audio/x-wav,audio/x-m4a,audio/aac,audio/ogg,audio/flac,.mp3,.m4a,.wav,.aac,.ogg,.flac,.mp4"
+              multiple
+              onChange={(e) => {
+                if (e.target.files) addSongs(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <SongList />
+          </>
+        ) : (
+          <MusicLibrary />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MusicLibrary() {
+  const addBuiltInTrack = useStore((s) => s.addBuiltInTrack);
+  const songs = useStore((s) => s.songs);
+  const [manifest, setManifest] = useState<MusicManifest | null | 'loading' | 'error'>('loading');
+  const [moodId, setMoodId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadMusicManifest().then((m) => {
+      if (cancelled) return;
+      if (!m) {
+        setManifest('error');
+        return;
+      }
+      setManifest(m);
+      setMoodId((cur) => cur ?? m.moods[0]?.id ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (manifest === 'loading') {
+    return <div className="panel-help" style={{ textAlign: 'center', padding: '20px 0' }}>Loading library…</div>;
+  }
+  if (manifest === 'error' || manifest === null) {
+    return (
+      <div className="panel-help" style={{ textAlign: 'center', padding: '20px 0' }}>
+        Couldn't load the music library. You can still add your own songs from the “My Songs” tab.
+      </div>
+    );
+  }
+
+  const mood = manifest.moods.find((m) => m.id === moodId) ?? manifest.moods[0];
+  const inShow = new Set(songs.map((s) => s.trackId).filter(Boolean));
+
+  const handleAdd = async (track: LibraryTrack) => {
+    setAdding(track.id);
+    try {
+      await addBuiltInTrack(track);
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  return (
+    <div className="music-library">
+      <div className="mood-tabs">
+        {manifest.moods.map((m) => (
+          <button
+            key={m.id}
+            className={'mood-tab' + (m.id === mood?.id ? ' active' : '')}
+            onClick={() => setMoodId(m.id)}
+          >
+            {m.name}
+          </button>
+        ))}
+      </div>
+
+      {mood?.blurb && <div className="panel-help" style={{ marginTop: 0 }}>{mood.blurb}</div>}
+
+      {mood && mood.tracks.length > 0 ? (
+        <div className="library-track-list">
+          {mood.tracks.map((track) => {
+            const already = inShow.has(track.id);
+            const busy = adding === track.id;
+            return (
+              <div className="library-track" key={track.id}>
+                <div className="library-track-info">
+                  <div className="library-track-title">{track.title}</div>
+                  <div className="library-track-meta">
+                    {track.artist ? track.artist : 'Unknown artist'}
+                    {track.duration ? ` · ${fmtTime(track.duration)}` : ''}
+                    {track.license ? ` · ${track.license}` : ''}
+                  </div>
+                  {track.source && (
+                    <a className="library-track-source" href={track.source} target="_blank" rel="noopener noreferrer">
+                      Source
+                    </a>
+                  )}
+                </div>
+                <button
+                  className={'btn library-track-add' + (already ? ' added' : '')}
+                  disabled={already || busy}
+                  onClick={() => handleAdd(track)}
+                  title={already ? 'Already in your show' : 'Add to show'}
+                >
+                  {already ? 'Added' : busy ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="panel-help" style={{ textAlign: 'center', padding: '20px 0' }}>
+          Tracks for this mood are coming soon. In the meantime, add your own from the “My Songs” tab.
+        </div>
+      )}
+
+      <div className="panel-help library-license-note">
+        Library tracks are royalty-free from their listed sources. Licenses shown are as stated by each source —
+        verify terms before public use.
       </div>
     </div>
   );

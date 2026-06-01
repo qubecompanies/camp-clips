@@ -1,15 +1,17 @@
 import { create } from 'zustand';
-import type { Photo, Song, Settings, TextScreen, PlaybackState } from './types';
+import type { Photo, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
 import { processImageFile } from '../lib/imageProcessing';
 import { readCaptureTime } from '../lib/exif';
 import { ensureAudioCtx, getGainNode } from '../lib/audioContext';
-import { isImageFile, isAudioFile, uid, shuffle } from '../lib/utils';
+import { trackUrl } from '../lib/musicLibrary';
+import { isImageFile, isAudioFile, isVideoFile, uid, shuffle } from '../lib/utils';
 import { toast } from './toastStore';
 
 interface AppState {
   eventName: string;
   photos: Photo[];
   songs: Song[];
+  sections: SectionCard[];
   intro: TextScreen;
   outro: TextScreen;
   settings: Settings;
@@ -25,6 +27,7 @@ interface AppState {
   // media actions
   addPhotos: (fileList: FileList | File[]) => Promise<void>;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
+  addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
   removePhoto: (id: string) => void;
   removeSong: (id: string) => void;
   clearPhotos: () => void;
@@ -33,6 +36,11 @@ interface AppState {
   reorderSongs: (orderedIds: string[]) => void;
   shufflePhotos: () => void;
   sortPhotosByDate: () => void;
+
+  // section title cards
+  addSection: (beforePhotoId: string) => void;
+  updateSection: (id: string, patch: Partial<SectionCard>) => void;
+  removeSection: (id: string) => void;
 
   // project load
   replaceProject: (data: {
@@ -47,6 +55,7 @@ export const useStore = create<AppState>((set, get) => ({
   eventName: '',
   photos: [],
   songs: [],
+  sections: [],
   intro: { title: '', subtitle: '', duration: 5 },
   outro: { title: '', subtitle: '', duration: 5 },
   settings: {
@@ -63,6 +72,7 @@ export const useStore = create<AppState>((set, get) => ({
     theme: 'light',
     exportRes: 1080,
     exportFmt: 'webm',
+    exportAspect: '16:9',
     templateId: 'default',
   },
   playback: { active: false, paused: false },
@@ -83,7 +93,13 @@ export const useStore = create<AppState>((set, get) => ({
   addPhotos: async (fileList) => {
     const files = Array.from(fileList).filter(isImageFile);
     if (!files.length) {
-      toast("Those don't look like image files. Try JPG, PNG, or HEIC.", 'error');
+      const hadVideo = Array.from(fileList).some(isVideoFile);
+      toast(
+        hadVideo
+          ? 'Video support is coming soon — for now, add photos.'
+          : "Those don't look like image files. Try JPG, PNG, or HEIC.",
+        hadVideo ? 'info' : 'error',
+      );
       return;
     }
 
@@ -126,6 +142,7 @@ export const useStore = create<AppState>((set, get) => ({
           height: result.height,
           included: true,
           capturedAt,
+          face: result.face,
         };
         set((s) => ({ photos: [...s.photos, photo] }));
         added++;
@@ -196,11 +213,68 @@ export const useStore = create<AppState>((set, get) => ({
     else toast("Couldn't decode any of those audio files. Try MP3 or M4A.", 'error');
   },
 
+  addBuiltInTrack: async (track) => {
+    // No duplicates — adding the same library track twice is a no-op.
+    if (get().songs.some((s) => s.trackId === track.id)) {
+      toast('That track is already in your show.', 'info');
+      return;
+    }
+
+    const { ctx } = ensureAudioCtx();
+    try {
+      // Lazy-fetch the bundled file only now (keeps the initial load light).
+      const res = await fetch(trackUrl(track.file), { cache: 'force-cache' });
+      if (!res.ok) throw new Error(`fetch ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+
+      // Validate + read true duration the same way uploaded songs do. We pass a
+      // copy because decodeAudioData consumes the buffer.
+      let duration = track.duration ?? 0;
+      try {
+        const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        duration = decoded.duration;
+      } catch (decodeErr) {
+        console.error('Built-in track decode failed for', track.title, decodeErr);
+        toast(`Couldn't load "${track.title}". The file may be missing.`, 'error');
+        return;
+      }
+
+      // Build a File so the rest of the pipeline (export, etc.) treats it like
+      // any other song — the only difference is the provenance fields.
+      const fileName = track.file.split('/').pop() || `${track.id}.mp3`;
+      const file = new File([arrayBuffer], fileName, { type: res.headers.get('content-type') || 'audio/mpeg' });
+
+      const song: Song = {
+        id: uid(),
+        name: track.artist ? `${track.title} — ${track.artist}` : track.title,
+        file,
+        arrayBuffer,
+        duration,
+        included: true,
+        builtIn: true,
+        trackId: track.id,
+        artist: track.artist,
+        source: track.source,
+        license: track.license,
+        attribution: track.attribution,
+      };
+      set((s) => ({ songs: [...s.songs, song] }));
+      toast(`Added "${track.title}".`, 'success');
+    } catch (err) {
+      console.error('Failed to add built-in track', track.title, err);
+      toast(`Couldn't load "${track.title}". Check your connection and try again.`, 'error');
+    }
+  },
+
   removePhoto: (id) =>
     set((s) => {
       const photo = s.photos.find((p) => p.id === id);
       if (photo?.revocable) URL.revokeObjectURL(photo.url);
-      return { photos: s.photos.filter((p) => p.id !== id) };
+      return {
+        photos: s.photos.filter((p) => p.id !== id),
+        // Drop any section card anchored to the photo we just removed.
+        sections: s.sections.filter((c) => c.beforePhotoId !== id),
+      };
     }),
 
   removeSong: (id) => set((s) => ({ songs: s.songs.filter((x) => x.id !== id) })),
@@ -210,7 +284,7 @@ export const useStore = create<AppState>((set, get) => ({
       s.photos.forEach((p) => {
         if (p.revocable) URL.revokeObjectURL(p.url);
       });
-      return { photos: [] };
+      return { photos: [], sections: [] };
     }),
 
   togglePhoto: (id) =>
@@ -247,6 +321,27 @@ export const useStore = create<AppState>((set, get) => ({
       toast(`Sorted ${dated.length} photo${dated.length === 1 ? '' : 's'} by date taken.`, 'success');
     }
   },
+
+  addSection: (beforePhotoId) =>
+    set((s) => {
+      // One card per anchor photo — adding again on the same photo is a no-op.
+      if (s.sections.some((c) => c.beforePhotoId === beforePhotoId)) return {};
+      const section: SectionCard = {
+        id: uid(),
+        beforePhotoId,
+        title: 'New Section',
+        subtitle: '',
+        duration: 4,
+      };
+      return { sections: [...s.sections, section] };
+    }),
+
+  updateSection: (id, patch) =>
+    set((s) => ({
+      sections: s.sections.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    })),
+
+  removeSection: (id) => set((s) => ({ sections: s.sections.filter((c) => c.id !== id) })),
 
   replaceProject: (data) =>
     set((s) => ({

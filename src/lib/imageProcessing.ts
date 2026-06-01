@@ -10,11 +10,15 @@
 
 export const MAX_IMAGE_DIM = 1600; // sufficient for 1920x1080 playback, ~60% smaller than 2048
 
+import { detectFaceFraming } from './faceDetect';
+import type { FaceFraming } from '../state/types';
+
 export interface ProcessedImage {
   url: string;
   revocable: boolean;
   width: number;
   height: number;
+  face?: FaceFraming | null;
 }
 
 function fileToDataURL(file: Blob): Promise<string> {
@@ -127,12 +131,22 @@ export async function processImageFile(file: File): Promise<ProcessedImage> {
   // Step 1: get a decodable blob (HEIC needs conversion first)
   let sourceBlob: Blob = file;
   if (isHeic) {
-    // Lazy-load heic2any only when a HEIC/HEIF file is actually imported.
-    // It's a heavy dependency (~1.5 MB) and most users never touch HEIC, so
+    // Lazy-load heic-to only when a HEIC/HEIF file is actually imported. It's a
+    // heavy dependency (libheif WASM) and most users never touch HEIC, so
     // keeping it out of the main bundle saves them the download entirely.
-    const { default: heic2any } = await import('heic2any');
-    const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
-    sourceBlob = Array.isArray(converted) ? converted[0] : converted;
+    // (heic-to ships a current libheif build — the old heic2any@0.0.4 libheif
+    // choked on modern iOS 16/17+ HEICs with "Could not parse HEIF file".)
+    try {
+      const { heicTo } = await import('heic-to');
+      sourceBlob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.85 });
+    } catch (err) {
+      // Conversion failed. Fall back to letting the browser decode the original
+      // directly — this rescues mislabeled JPEGs and platforms with native HEIC
+      // support (Safari/iOS). On Chrome/Windows this will simply fail at the
+      // decode step below and the photo is reported as unloadable upstream.
+      console.warn('[image] HEIC conversion failed, trying native decode:', file.name, err);
+      sourceBlob = file;
+    }
   }
 
   // Step 2: decode to bitmap (this is the high-memory moment; we hold a single
@@ -157,10 +171,21 @@ export async function processImageFile(file: File): Promise<ProcessedImage> {
 
   // Step 4: canvas → blob (NOT data URL) → usable URL
   const outBlob = await canvasToBlob(canvas, 'image/jpeg', 0.88);
+
+  // Step 5: face detection for smart framing. Runs on the small canvas we
+  // already have, BEFORE we free it. Fully optional — returns null on any
+  // failure, and Ken Burns falls back to centre framing.
+  let face: FaceFraming | null = null;
+  try {
+    face = await detectFaceFraming(canvas);
+  } catch (e) {
+    /* non-fatal — leave face null */
+  }
+
   // Clear the canvas immediately so its backing store can be freed
   canvas.width = 0;
   canvas.height = 0;
 
   const usable = await blobToUsableUrl(outBlob);
-  return { ...usable, width: newW, height: newH };
+  return { ...usable, width: newW, height: newH, face };
 }

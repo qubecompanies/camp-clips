@@ -22,21 +22,37 @@ function _nextKbType(allowPan: boolean): KbType {
   return t;
 }
 
-// Smart focal point: faces in camp photos cluster slightly above center
-// (rule of thirds upper line). Real ML face detection could replace this
-// by writing photo.kbPlan.focal directly.
+// Fallback focal when no faces are detected: camp photos tend to put subjects
+// slightly above center (rule of thirds upper line).
 function _defaultFocal() {
   return { x: 0.5, y: 0.42 };
 }
 
-export function ensureKbPlan(photo: Photo, naturalW: number, naturalH: number): KbPlan {
+// Cap zoom on face photos so people stay comfortably in frame. Even at the
+// "energetic" 18% global intensity, a face shot should not push past ~10%.
+const FACE_MAX_ZOOM = 0.1;
+
+export function ensureKbPlan(photo: Photo, _naturalW: number, _naturalH: number): KbPlan {
   if (photo.kbPlan) return photo.kbPlan;
-  const w = naturalW || 16,
-    h = naturalH || 9;
-  const tall = h / w > 1.4; // clearly a single-subject portrait
-  const fillMode: 'cover' | 'contain' = tall ? 'contain' : 'cover'; // preserve tall portraits, fill the rest
-  const allowPan = fillMode === 'cover';
-  const type = _nextKbType(allowPan);
+  const settings = useStore.getState().settings;
+
+  // Show the WHOLE photo (letterboxed) instead of cropping to fill the frame —
+  // quality over a zoomed-in fill. Phone photos are often tall or wide and
+  // shouldn't lose their edges (or heads) just to fill a 16:9 stage.
+  const fillMode: 'cover' | 'contain' = 'contain';
+
+  // FACE-AWARE PLAN: anchor the gentle zoom on the detected faces.
+  if (photo.face) {
+    const type: KbType = Math.random() < 0.5 ? 'zoomIn' : 'zoomOut';
+    const zoom = Math.min(settings.kenBurnsIntensity, FACE_MAX_ZOOM);
+    photo.kbPlan = { type, focal: { ...photo.face.focal }, fillMode, zoom };
+    return photo.kbPlan;
+  }
+
+  // No faces: gentle ZOOM ONLY. Panning a letterboxed photo just slides it over
+  // the black bars, which reads as broken — and the cross-screen pan was the
+  // source of the visible judder. Zoom about the focal point is smooth.
+  const type = _nextKbType(false);
   photo.kbPlan = { type, focal: _defaultFocal(), fillMode };
   return photo.kbPlan;
 }
@@ -68,8 +84,13 @@ export function applyLiveKenBurns(imgEl: KbImg, photo: Photo, motionMs: number):
   const plan = ensureKbPlan(photo, imgEl.naturalWidth, imgEl.naturalHeight);
   imgEl.classList.add(plan.fillMode === 'cover' ? 'kb-cover' : 'kb-contain');
   imgEl.style.transformOrigin = `${plan.focal.x * 100}% ${plan.focal.y * 100}%`;
+  // In cover mode the image is cropped to fill the frame; object-position shifts
+  // that crop so the focal point (faces, when detected) is what's kept, instead
+  // of the default center crop that can lop heads off.
+  imgEl.style.objectPosition =
+    plan.fillMode === 'cover' ? `${plan.focal.x * 100}% ${plan.focal.y * 100}%` : '50% 50%';
 
-  const Z = settings.kenBurnsIntensity;
+  const Z = plan.zoom ?? settings.kenBurnsIntensity;
   const zoomed = 1 + Z;
   const p = Math.min(Z * 50, 6); // pan distance in % of element
 
@@ -103,6 +124,12 @@ export function applyLiveKenBurns(imgEl: KbImg, photo: Photo, motionMs: number):
       from = `scale(1)`;
       to = `scale(${zoomed})`;
   }
+
+  // Force the image onto its own GPU compositor layer for the whole animation.
+  // translateZ(0) promotes it so the zoom is composited (smooth) rather than
+  // repainted on the main thread (which judders, especially at high zoom).
+  from += ' translateZ(0)';
+  to += ' translateZ(0)';
 
   try {
     imgEl._kbAnim = imgEl.animate([{ transform: from }, { transform: to }], {
@@ -152,12 +179,27 @@ export function cancelKbAnims(imgs: (KbImg | null)[]): void {
 }
 
 // ===== EXPORT (canvas drawImage math) =====
-function _computeBaseFit(W: number, H: number, iw: number, ih: number, mode: 'cover' | 'contain') {
+function _computeBaseFit(
+  W: number,
+  H: number,
+  iw: number,
+  ih: number,
+  mode: 'cover' | 'contain',
+  focal?: { x: number; y: number },
+) {
   let scale;
   if (mode === 'cover') scale = Math.max(W / iw, H / ih);
   else scale = Math.min(W / iw, H / ih);
   const w = iw * scale,
     h = ih * scale;
+  // For cover, bias the crop so the focal point (faces) lands at the same
+  // relative spot in the frame — mirrors CSS object-position in the live
+  // preview. Centered when no focal is given or in contain mode (letterbox).
+  if (mode === 'cover' && focal) {
+    const x = Math.min(0, Math.max(W - w, focal.x * (W - w)));
+    const y = Math.min(0, Math.max(H - h, focal.y * (H - h)));
+    return { x, y, w, h };
+  }
   return { x: (W - w) / 2, y: (H - h) / 2, w, h };
 }
 
@@ -226,8 +268,9 @@ export function drawKB(
     ctx.restore();
     return;
   }
-  const base = _computeBaseFit(W, H, img.width, img.height, plan.fillMode);
-  const r = _applyKbToRect(base, plan, t, W, H, settings.kenBurnsIntensity);
+  const base = _computeBaseFit(W, H, img.width, img.height, plan.fillMode, plan.focal);
+  const Z = plan.zoom ?? settings.kenBurnsIntensity;
+  const r = _applyKbToRect(base, plan, t, W, H, Z);
   ctx.drawImage(img, r.x, r.y, r.w, r.h);
   ctx.restore();
 }

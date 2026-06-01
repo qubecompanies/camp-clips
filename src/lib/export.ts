@@ -1,10 +1,37 @@
 import { useStore } from '../state/store';
-import { buildPlaybackList, getIncludedSongs } from './planning';
+import { buildPlaybackList, getIncludedSongs, computePlan, sectionMap, sectionTimeForList } from './planning';
 import { ensureKbPlan, drawKB } from './kenBurns';
 import { TEMPLATES } from './templates';
 import { sleep, fmtTime, easeInOut } from './utils';
 import { toast } from '../state/toastStore';
-import type { KbPlan } from '../state/types';
+import type { KbPlan, ExportAspect, ExportRes } from '../state/types';
+
+// Map the chosen aspect + resolution to canvas pixels and a target bitrate.
+// `exportRes` is treated as the SHORT edge (the conventional meaning of
+// 720/1080/1440 for 16:9), so each preset keeps comparable per-axis sharpness.
+// Bitrate is keyed to the res tier (portrait shares 16:9's pixel count; square
+// has fewer pixels, so it simply renders at slightly higher quality — fine).
+export function exportDimensions(aspect: ExportAspect, res: ExportRes): [number, number, number] {
+  const bitrateByRes: Record<number, number> = {
+    720: 3_000_000,
+    1080: 5_000_000,
+    1440: 8_000_000,
+  };
+  const short = res;
+  const long = Math.round((short * 16) / 9) & ~1; // even for codec safety
+  let W: number, H: number;
+  if (aspect === '9:16') {
+    W = short;
+    H = long;
+  } else if (aspect === '1:1') {
+    W = short;
+    H = short;
+  } else {
+    W = long;
+    H = short;
+  }
+  return [W, H, bitrateByRes[res] || bitrateByRes[1080]];
+}
 
 // ============ EXPORT ENGINE ============
 // Ported verbatim from the prototype. Renders the slideshow to a canvas frame
@@ -71,8 +98,9 @@ function drawAnimatedTitle(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Scale type with canvas width — handles 720 / 1080 / 1440
-  const sx = W / 1920;
+  // Scale type with the canvas SHORT edge so titles stay proportionate and fit
+  // across every aspect (for 16:9 this equals the old W/1920 exactly).
+  const sx = Math.min(W, H) / 1080;
   const titleSize = Math.round(88 * sx);
   const subSize = Math.round(32 * sx);
 
@@ -247,13 +275,12 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
 
   // Build the same shuffled/capped photo list the preview uses
   const { list: photos, hold: effHold } = buildPlaybackList();
-  // Resolution settings: 720p = 1280x720, 1080p = 1920x1080, 1440p = 2560x1440
-  const resMap: Record<number, [number, number, number]> = {
-    720: [1280, 720, 3_000_000],
-    1080: [1920, 1080, 5_000_000],
-    1440: [2560, 1440, 8_000_000],
-  };
-  const [W, H, videoBitsPerSecond] = resMap[settings.exportRes] || resMap[1080];
+  // Section title cards interleaved before their anchor photos (linear runs only).
+  const looped = computePlan().looped;
+  const cards = sectionMap(photos, looped);
+  const sectionTime = sectionTimeForList(photos, looped);
+  // Canvas pixels for the chosen aspect + resolution (16:9 / 9:16 / 1:1).
+  const [W, H, videoBitsPerSecond] = exportDimensions(settings.exportAspect, settings.exportRes);
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -341,7 +368,8 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
       (intro.title ? intro.duration : 0) +
       photos.length * effHold +
       Math.max(0, photos.length - 1) * settings.transitionDuration +
-      (outro.title ? outro.duration : 0);
+      (outro.title ? outro.duration : 0) +
+      sectionTime;
     let scheduledTime = 0;
     let idx = 0;
     const startAt = audioCtx.currentTime + 0.1; // small lead-in
@@ -366,7 +394,8 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     (intro.title ? intro.duration : 0) +
     photos.length * effHold +
     Math.max(0, photos.length - 1) * settings.transitionDuration +
-    (outro.title ? outro.duration : 0);
+    (outro.title ? outro.duration : 0) +
+    sectionTime;
 
   const renderStart = performance.now();
   const tpl = TEMPLATES[settings.templateId] || TEMPLATES.default;
@@ -388,7 +417,14 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   let prevPlan: KbPlan | null = null;
   for (let i = 0; i < loadedImages.length && !_cancelled; i++) {
     const plan = ensureKbPlan(photos[i], loadedImages[i].width, loadedImages[i].height);
-    if (i > 0) {
+    const card = cards.get(photos[i].id);
+    if (card) {
+      // Fade the previous photo out, render the section card, then fade this
+      // photo in from black (so the card reads as a clean chapter break).
+      if (i > 0) await renderFadeOutKB(ctx, W, H, loadedImages[i - 1], prevPlan, 1.0, 0.8);
+      await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, tick, { titleStyle });
+      await renderFadeInKB(ctx, W, H, loadedImages[i], plan, 0, transFrac, settings.transitionDuration, tick);
+    } else if (i > 0) {
       await renderCrossfadeKB(
         ctx,
         W,

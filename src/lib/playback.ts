@@ -1,5 +1,12 @@
 import { useStore } from '../state/store';
-import { buildPlaybackList, getIncludedSongs, getIncludedPhotos } from './planning';
+import {
+  buildPlaybackList,
+  getIncludedSongs,
+  getIncludedPhotos,
+  computePlan,
+  sectionMap,
+  sectionTimeForList,
+} from './planning';
 import { applyLiveKenBurns, cancelKbAnims, pauseKbAnims, resumeKbAnims } from './kenBurns';
 import { ensureAudioCtx, getAudioCtx, unlockAudio } from './audioContext';
 import { TEMPLATES } from './templates';
@@ -33,6 +40,27 @@ let currentImg: KbImg | null = null;
 let nextImg: KbImg | null = null;
 let playbackController: { cancelled: boolean } | null = null;
 
+// Single-slot decode warmer. We hold AT MOST one extra decoded image (the next
+// photo) so the browser has it ready before its slide begins — this kills the
+// hitch that used to happen because the decode landed exactly when Ken Burns
+// motion started. Bounded to one image to stay within the memory-safe budget
+// (the two visible <img> elements + this = 3 decoded images max at any time).
+let _preloadImg: HTMLImageElement | null = null;
+let _preloadUrl: string | null = null;
+function preloadPhoto(url: string): void {
+  if (_preloadUrl === url) return;
+  _preloadUrl = url;
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = url;
+  _preloadImg = img;
+  if (img.decode) img.decode().catch(() => {});
+}
+function clearPreload(): void {
+  _preloadImg = null;
+  _preloadUrl = null;
+}
+
 // Music playback (Web Audio API)
 let musicQueue: Song[] = [];
 let musicQueueIndex = 0;
@@ -64,7 +92,13 @@ export async function startPlayback(): Promise<void> {
   }
 
   const { overlay, playbackProgress } = refs;
-  const { settings } = useStore.getState();
+  const { settings, sections } = useStore.getState();
+
+  // Section cards only play in linear order — warn (before fullscreen) if the
+  // current settings would hide them, so the omission isn't a surprise.
+  if (sections.length && (settings.shuffleOnPlay || computePlan().looped)) {
+    toast('Section cards are skipped when photos are shuffled or looped.', 'info');
+  }
 
   useStore.getState().setPlayback({ active: true, paused: false });
   overlay.classList.add('active');
@@ -90,6 +124,7 @@ export function stopPlayback(): void {
 
   useStore.getState().setPlayback({ active: false });
   if (playbackController) playbackController.cancelled = true;
+  clearPreload();
   overlay.classList.remove('active');
   cancelKbAnims([imgA, imgB]);
   imgA.style.transform = 'none';
@@ -146,11 +181,16 @@ async function runSlideshowSequence(
   if (!refs) return;
   const { playbackProgress } = refs;
   const { intro, outro, settings } = useStore.getState();
+  const looped = computePlan().looped;
+  const cards = sectionMap(photos, looped);
+  // Warm the first photo while the intro card is on screen.
+  if (photos.length) preloadPhoto(photos[0].url);
   const totalDuration =
     intro.duration +
     outro.duration +
     photos.length * holdSec +
-    Math.max(0, photos.length - 1) * settings.transitionDuration;
+    Math.max(0, photos.length - 1) * settings.transitionDuration +
+    sectionTimeForList(photos, looped);
   const startTime = performance.now();
   const progressTimer = window.setInterval(() => {
     if (controller.cancelled) {
@@ -174,8 +214,19 @@ async function runSlideshowSequence(
   for (let i = 0; i < photos.length; i++) {
     if (controller.cancelled) break;
     await waitForUnpaused(controller);
+    // A section card anchored to this photo plays first: fade the current photo
+    // to black, show the card, then the photo fades in (crossfade-from-black).
+    const card = cards.get(photos[i].id);
+    if (card) {
+      await fadeImagesOut(settings.transitionDuration);
+      if (controller.cancelled) break;
+      await showTextScreen(card.title, card.subtitle, card.duration, controller);
+      if (controller.cancelled) break;
+    }
     await crossfadeToPhoto(photos[i], settings.transitionDuration, holdSec, controller);
     if (controller.cancelled) break;
+    // Decode the NEXT photo during this hold so its slide starts jank-free.
+    if (i + 1 < photos.length) preloadPhoto(photos[i + 1].url);
     await waitWithPause(holdSec * 1000, controller);
   }
 
@@ -228,32 +279,38 @@ async function crossfadeToPhoto(
   photo: Photo,
   transSec: number,
   holdSec: number,
-  _controller: { cancelled: boolean },
+  controller: { cancelled: boolean },
 ): Promise<void> {
-  return new Promise((resolve) => {
-    if (!refs || !currentImg || !nextImg) {
-      resolve();
-      return;
-    }
-    const { textOverlay } = refs;
-    textOverlay.classList.remove('visible');
-    const incoming = nextImg;
-    const outgoing = currentImg;
-    incoming.onload = () => {
-      // Start motion now, lasting the full time this photo is visible
-      // (its fade-in plus its hold), so movement is continuous and smooth.
-      applyLiveKenBurns(incoming, photo, (transSec + holdSec) * 1000);
-      incoming.classList.add('visible');
-      outgoing.classList.remove('visible');
-      setTimeout(() => {
-        currentImg = incoming;
-        nextImg = outgoing;
-        resolve();
-      }, transSec * 1000);
-    };
-    incoming.onerror = () => resolve();
-    incoming.src = photo.url;
-  });
+  if (!refs || !currentImg || !nextImg) return;
+  const { textOverlay } = refs;
+  textOverlay.classList.remove('visible');
+  const incoming = nextImg;
+  const outgoing = currentImg;
+  incoming.src = photo.url;
+
+  // Wait until the image is FULLY DECODED before we reveal it and start motion.
+  // img.decode() resolves only when the bitmap is paint-ready, so the decode
+  // cost never lands on the first animation frames (that was the visible
+  // stutter). Thanks to preloadPhoto() during the prior hold this is usually
+  // instant. Falls back to the load event if decode() rejects.
+  try {
+    if (incoming.decode) await incoming.decode();
+  } catch (e) {
+    await new Promise<void>((res) => {
+      incoming.onload = () => res();
+      incoming.onerror = () => res();
+    });
+  }
+  if (controller.cancelled) return;
+
+  // Start motion now, lasting the full time this photo is visible (its fade-in
+  // plus its hold), so movement is continuous and smooth.
+  applyLiveKenBurns(incoming, photo, (transSec + holdSec) * 1000);
+  incoming.classList.add('visible');
+  outgoing.classList.remove('visible');
+  await sleep(transSec * 1000);
+  currentImg = incoming;
+  nextImg = outgoing;
 }
 
 async function fadeImagesOut(durationSec: number): Promise<void> {

@@ -26,8 +26,15 @@ export const easeInOut = (t: number): number =>
 // or unexpected MIME types for MP3/M4A files. Fall back to extension matching.
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i;
 const AUDIO_EXT = /\.(mp3|m4a|wav|aac|ogg|flac|opus|mp4|wma|aiff?)$/i;
+// Only unambiguous video extensions — mp4/webm are intentionally excluded
+// because they double as audio containers; we lean on the video/* MIME type
+// for those. Used to give a friendly "coming soon" message rather than a
+// confusing failure when someone drops a clip.
+const VIDEO_EXT = /\.(mov|m4v|avi|mkv|3gp|wmv|flv|mts|m2ts)$/i;
 
+export const isVideoFile = (f: File) =>
+  (f.type && f.type.startsWith('video/')) || VIDEO_EXT.test(f.name);
 export const isImageFile = (f: File) =>
-  (f.type && f.type.startsWith('image/')) || IMAGE_EXT.test(f.name);
+  !isVideoFile(f) && ((f.type && f.type.startsWith('image/')) || IMAGE_EXT.test(f.name));
 export const isAudioFile = (f: File) =>
-  (f.type && f.type.startsWith('audio/')) || AUDIO_EXT.test(f.name);
+  !isVideoFile(f) && ((f.type && f.type.startsWith('audio/')) || AUDIO_EXT.test(f.name));

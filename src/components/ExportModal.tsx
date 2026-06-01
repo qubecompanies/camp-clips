@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useStore } from '../state/store';
 import { doExport, cancelExport } from '../lib/export';
 import { unlockAudio } from '../lib/audioContext';
-import type { ExportRes, ExportFmt } from '../state/types';
+import type { ExportRes, ExportFmt, ExportAspect } from '../state/types';
+import { exportDimensions } from '../lib/export';
 
 interface Props {
   onClose: () => void;
@@ -12,6 +13,15 @@ const RES_OPTIONS: { res: ExportRes; label: string }[] = [
   { res: 720, label: '720p · faster' },
   { res: 1080, label: '1080p · sharp' },
   { res: 1440, label: '1440p · projector' },
+];
+
+// Aspect presets. Icons are distinct SHAPES (wide / tall / square) so they read
+// without relying on color — landscape for TV/projector, portrait for Reels &
+// Stories, square for feed posts.
+const ASPECT_OPTIONS: { aspect: ExportAspect; label: string; w: number; h: number; use: string }[] = [
+  { aspect: '16:9', label: 'Landscape', w: 22, h: 13, use: 'TV · YouTube' },
+  { aspect: '9:16', label: 'Portrait', w: 13, h: 22, use: 'Reels · TikTok' },
+  { aspect: '1:1', label: 'Square', w: 18, h: 18, use: 'Feed post' },
 ];
 
 export function ExportModal({ onClose }: Props) {
@@ -69,6 +79,35 @@ export function ExportModal({ onClose }: Props) {
             <div className="panel-help" style={{ marginBottom: 16 }}>
               Names your download:{' '}
               <code>{(eventName.trim() || 'camp-clips').replace(/[^a-z0-9-_]/gi, '_')}.{settings.exportFmt}</code>
+            </div>
+            <label className="panel-label" style={{ marginBottom: 8 }}>
+              Shape
+            </label>
+            <div className="field-row aspect-row" style={{ gap: 6, marginBottom: 6 }}>
+              {ASPECT_OPTIONS.map((o) => (
+                <button
+                  key={o.aspect}
+                  className={'btn aspect-btn' + (settings.exportAspect === o.aspect ? ' active' : '')}
+                  onClick={() => updateSettings({ exportAspect: o.aspect })}
+                  title={`${o.label} (${o.aspect}) — ${o.use}`}
+                >
+                  <span className="aspect-glyph" aria-hidden>
+                    <span className="aspect-rect" style={{ width: o.w, height: o.h }} />
+                  </span>
+                  <span className="aspect-name">{o.label}</span>
+                  <span className="aspect-use">{o.use}</span>
+                </button>
+              ))}
+            </div>
+            <div className="panel-help" style={{ marginBottom: 16 }}>
+              Exports at{' '}
+              <code>
+                {(() => {
+                  const [w, h] = exportDimensions(settings.exportAspect, settings.exportRes);
+                  return `${w}×${h}`;
+                })()}
+              </code>{' '}
+              ({settings.exportAspect}).
             </div>
             <label className="panel-label" style={{ marginBottom: 8 }}>
               Resolution

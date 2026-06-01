@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import Sortable from 'sortablejs';
 import { useStore } from '../state/store';
-import { isImageFile, isAudioFile } from '../lib/utils';
+import { isImageFile, isAudioFile, isVideoFile } from '../lib/utils';
 import { toast } from '../state/toastStore';
 
 interface Props {
@@ -19,8 +19,10 @@ const GooglePhotosIcon = () => (
 
 export function PhotoGrid({ onShowGooglePhotos }: Props) {
   const photos = useStore((s) => s.photos);
+  const sections = useStore((s) => s.sections);
   const addPhotos = useStore((s) => s.addPhotos);
   const addSongs = useStore((s) => s.addSongs);
+  const addSection = useStore((s) => s.addSection);
   const removePhoto = useStore((s) => s.removePhoto);
   const togglePhoto = useStore((s) => s.togglePhoto);
   const clearPhotos = useStore((s) => s.clearPhotos);
@@ -59,6 +61,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
   }, [reorderPhotos]);
 
   const included = photos.filter((p) => p.included).length;
+  const sectionByPhoto = new Map(sections.map((s) => [s.beforePhotoId, s]));
 
   const handleClear = () => {
     if (!photos.length) return;
@@ -88,9 +91,13 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
     const files = Array.from(e.dataTransfer.files);
     const images = files.filter(isImageFile);
     const audio = files.filter(isAudioFile);
+    const video = files.filter(isVideoFile);
     if (images.length) addPhotos(images);
     if (audio.length) addSongs(audio);
-    if (!images.length && !audio.length) toast('Drop photos or audio files to add them.', 'error');
+    if (!images.length && !audio.length) {
+      if (video.length) toast('Video support is coming soon — for now, add photos.', 'info');
+      else toast('Drop photos or audio files to add them.', 'error');
+    }
   };
 
   return (
@@ -188,40 +195,73 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
           </div>
         )}
         <div ref={gridRef} className="photo-grid">
-          {photos.map((photo, index) => (
-            <div
-              key={photo.id}
-              className={'photo-card' + (photo.included ? '' : ' excluded') + (photo.loadError ? ' load-error' : '')}
-              data-id={photo.id}
-              onClick={(e) => {
-                if ((e.target as HTMLElement).closest('.remove-btn')) {
-                  removePhoto(photo.id);
-                  return;
-                }
-                togglePhoto(photo.id);
-              }}
-            >
-              <img src={photo.url} alt="" loading="lazy" />
-              <div className="photo-error">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-                <div className="photo-error-name">{photo.name}</div>
-                <div className="photo-error-hint">Can't display this file</div>
-              </div>
-              <span className="photo-index">{index + 1}</span>
-              <div className="photo-actions">
-                <button className="photo-action-btn remove-btn" title="Remove">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
+          {photos.map((photo, index) => {
+            const section = sectionByPhoto.get(photo.id);
+            return (
+              <div
+                key={photo.id}
+                className={'photo-card' + (photo.included ? '' : ' excluded') + (photo.loadError ? ' load-error' : '')}
+                data-id={photo.id}
+                onClick={(e) => {
+                  const t = e.target as HTMLElement;
+                  if (t.closest('.remove-btn')) {
+                    removePhoto(photo.id);
+                    return;
+                  }
+                  if (t.closest('.section-btn')) {
+                    if (sectionByPhoto.has(photo.id)) {
+                      toast('This photo already has a section card. Edit it in Setup ▸ Section Cards.', 'info');
+                    } else {
+                      addSection(photo.id);
+                      toast('Section card added — title it in Setup ▸ Section Cards.', 'success');
+                    }
+                    return;
+                  }
+                  togglePhoto(photo.id);
+                }}
+              >
+                <img src={photo.url} alt="" loading="lazy" />
+                <div className="photo-error">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
-                </button>
+                  <div className="photo-error-name">{photo.name}</div>
+                  <div className="photo-error-hint">Can't display this file</div>
+                </div>
+                <span className="photo-index">{index + 1}</span>
+                {section && (
+                  <span className="photo-section-badge" title={`Section card: ${section.title || 'Untitled'}`}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="4" y1="7" x2="20" y2="7" />
+                      <line x1="4" y1="12" x2="14" y2="12" />
+                      <line x1="4" y1="17" x2="11" y2="17" />
+                    </svg>
+                    {section.title || 'Section'}
+                  </span>
+                )}
+                <div className="photo-actions">
+                  <button
+                    className={'photo-action-btn section-btn' + (section ? ' active' : '')}
+                    title={section ? 'Has a section card (edit in Setup)' : 'Add a section card before this photo'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="4" y1="7" x2="20" y2="7" />
+                      <line x1="4" y1="12" x2="14" y2="12" />
+                      <line x1="4" y1="17" x2="11" y2="17" />
+                    </svg>
+                  </button>
+                  <button className="photo-action-btn remove-btn" title="Remove">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </main>

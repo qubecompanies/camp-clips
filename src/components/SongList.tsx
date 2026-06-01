@@ -53,7 +53,11 @@ export function SongList() {
           </span>
           <div className="song-info">
             <div className="song-name">{song.name}</div>
-            <div className="song-duration">{fmtTime(song.duration)}</div>
+            <div className="song-duration">
+              {fmtTime(song.duration)}
+              {song.builtIn && <span className="song-badge">Library</span>}
+              {song.builtIn && song.license ? ` · ${song.license}` : ''}
+            </div>
           </div>
           <button
             className="song-remove"

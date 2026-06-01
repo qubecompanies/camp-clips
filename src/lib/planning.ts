@@ -1,6 +1,10 @@
 import { useStore } from '../state/store';
 import { shuffle } from './utils';
-import type { Photo, ShowLength } from '../state/types';
+import type { Photo, ShowLength, SectionCard } from '../state/types';
+
+// Fade-out length (seconds) we play on the outgoing photo before a section card.
+// Matches the outro's fade-out so the timing math stays honest.
+const SECTION_FADE = 0.8;
 
 export function getIncludedPhotos(): Photo[] {
   return useStore.getState().photos.filter((p) => p.included);
@@ -11,6 +15,32 @@ export function getIncludedSongs() {
 
 export function totalIncludedSongSeconds(): number {
   return getIncludedSongs().reduce((sum, s) => sum + (s.duration || 0), 0);
+}
+
+// ===== SECTION CARDS =====
+// Section cards only render in LINEAR playback: not shuffled and not looped.
+// (Shuffling scrambles the anchor order; looping repeats photos, which would
+// repeat or misplace a card.) These helpers return the cards that will actually
+// show for a given run, so playback/export/time-math all agree.
+export function sectionsForList(list: Photo[], looped: boolean): SectionCard[] {
+  const { sections, settings } = useStore.getState();
+  if (!sections.length || settings.shuffleOnPlay || looped) return [];
+  const ids = new Set(list.map((p) => p.id));
+  return sections.filter((c) => ids.has(c.beforePhotoId));
+}
+
+export function sectionMap(list: Photo[], looped: boolean): Map<string, SectionCard> {
+  const m = new Map<string, SectionCard>();
+  for (const c of sectionsForList(list, looped)) {
+    if (!m.has(c.beforePhotoId)) m.set(c.beforePhotoId, c);
+  }
+  return m;
+}
+
+// Seconds the active section cards add to a run (card hold + its lead-in fade).
+export function sectionTimeForList(list: Photo[], looped: boolean): number {
+  const cards = sectionsForList(list, looped);
+  return cards.reduce((sum, c) => sum + c.duration + SECTION_FADE, 0);
 }
 
 export interface Plan {
@@ -39,8 +69,17 @@ export function computePlan(): Plan {
 
   const introDur = intro.title ? intro.duration : 0;
   const outroDur = outro.title ? outro.duration : 0;
+  // Section cards eat into the photo budget too (only when they'll actually
+  // render — i.e. linear playback). Carve their time out alongside intro/outro.
+  const includedIds = new Set(getIncludedPhotos().map((p) => p.id));
+  const sectionDur = settings.shuffleOnPlay
+    ? 0
+    : useStore
+        .getState()
+        .sections.filter((c) => includedIds.has(c.beforePhotoId))
+        .reduce((sum, c) => sum + c.duration + 0.8, 0);
   const target = mode === 'time' ? settings.timeLimitMin * 60 : totalIncludedSongSeconds();
-  const budget = Math.max(perCost, target - introDur - outroDur);
+  const budget = Math.max(perCost, target - introDur - outroDur - sectionDur);
   const naturalTime = P * perCost;
 
   if (budget >= naturalTime) {

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "moods": [
+    {
+      "id": "upbeat",
+      "name": "Upbeat",
+      "blurb": "Bright, driving energy — recaps, highlight reels, fun.",
+      "tracks": []
+    },
+    {
+      "id": "cinematic",
+      "name": "Cinematic",
+      "blurb": "Big, sweeping builds — openers and emotional payoffs.",
+      "tracks": []
+    },
+    {
+      "id": "warm",
+      "name": "Warm",
+      "blurb": "Gentle, acoustic, heartfelt — family and reunion vibes.",
+      "tracks": []
+    },
+    {
+      "id": "reflective",
+      "name": "Reflective",
+      "blurb": "Calm, spacious, contemplative — slow montages and outros.",
+      "tracks": []
+    }
+  ]
+}
