@@ -70,12 +70,18 @@ export interface LibraryTrack {
   source?: string; // URL the track came from
   license?: string; // license label as stated by the source
   attribution?: string; // credit line to display/paste when required
+  // A "suggestion" whose audio file isn't bundled yet. The UI shows a
+  // "Get track" link to `source` instead of an Add button. Once you download
+  // the file into public/music/ and drop the flag (or set it false), the same
+  // entry becomes addable. Lets us ship curated picks before hosting audio.
+  pending?: boolean;
 }
 
 export interface LibraryMood {
   id: string;
   name: string;
   blurb?: string;
+  browseUrl?: string; // optional "browse more like this" link (e.g. a Pixabay mood page)
   tracks: LibraryTrack[];
 }
 

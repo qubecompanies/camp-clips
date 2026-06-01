@@ -95,8 +95,8 @@ export default function Landing() {
                 </div>
               </div>
               <div className="app-body">
-                <div className="preview-event">Sugar Hill Stake Youth Camp</div>
-                <div className="preview-loc">Aiken, SC · June 2026 · 247 photos</div>
+                <div className="preview-event">Summer Camp 2026</div>
+                <div className="preview-loc">Lakeside · 240 photos</div>
                 <div className="preview-grid">
                   <div className="preview-tile" />
                   <div className="preview-tile" />
@@ -141,10 +141,11 @@ export default function Landing() {
           <div className="feature">
             <div className="ftnum">01</div>
             <div className="feature-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
-                <polyline points="21 15 16 10 5 21" />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="8" y="3" width="13" height="13" rx="2" />
+                <circle cx="12" cy="7.5" r="1.4" fill="currentColor" stroke="none" />
+                <path d="M21 12l-3.5-3.5L12 14" />
+                <path d="M16 21H5a2 2 0 0 1-2-2V8" />
               </svg>
             </div>
             <h3>Drop a folder of photos.</h3>
@@ -157,10 +158,13 @@ export default function Landing() {
           <div className="feature">
             <div className="ftnum">02</div>
             <div className="feature-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 18V5l12-2v13" />
-                <circle cx="6" cy="18" r="3" />
-                <circle cx="18" cy="16" r="3" />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 17V5l8-2v10" />
+                <circle cx="10.5" cy="17" r="2.5" />
+                <circle cx="18.5" cy="13" r="2.5" />
+                <line x1="3" y1="6" x2="9" y2="6" />
+                <line x1="3" y1="11" x2="9" y2="11" />
+                <line x1="3" y1="16" x2="6" y2="16" />
               </svg>
             </div>
             <h3>Add a few songs.</h3>
@@ -173,8 +177,11 @@ export default function Landing() {
           <div className="feature">
             <div className="ftnum">03</div>
             <div className="feature-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="5 3 19 12 5 21 5 3" />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="13" rx="2" />
+                <polygon points="10 8 16 11 10 14" fill="currentColor" stroke="none" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
               </svg>
             </div>
             <h3>Hit play. Or export.</h3>

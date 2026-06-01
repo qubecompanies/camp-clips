@@ -103,14 +103,14 @@ function SetupPanel() {
         <input
           type="text"
           className="input mb-12"
-          placeholder="e.g. Stake Youth Camp 2026"
+          placeholder="e.g. Summer Camp 2026"
           value={intro.title}
           onChange={(e) => setIntro({ title: e.target.value })}
         />
         <input
           type="text"
           className="input mb-12"
-          placeholder="e.g. Aiken, SC · June 2026"
+          placeholder="e.g. Lakeside · June 2026"
           value={intro.subtitle}
           onChange={(e) => setIntro({ subtitle: e.target.value })}
         />
@@ -173,7 +173,7 @@ function SectionCardsPanel() {
       <div className="panel-section">
         <label className="panel-label">Section Cards</label>
         <div className="panel-help" style={{ marginTop: 0 }}>
-          Break the show into chapters. Hover any photo in the grid and tap the{' '}
+          Break the show into chapters. Hover a photo and tap its{' '}
           <svg
             className="inline-hint-icon"
             width="12"
@@ -187,8 +187,7 @@ function SectionCardsPanel() {
             <line x1="4" y1="12" x2="14" y2="12" />
             <line x1="4" y1="17" x2="11" y2="17" />
           </svg>{' '}
-          button to insert a title card before it. (Section cards show in normal order — they're skipped when photos
-          are shuffled or looped.)
+          button to add a title card before it.
         </div>
       </div>
     );
@@ -385,20 +384,31 @@ function MusicLibrary() {
                     {track.duration ? ` · ${fmtTime(track.duration)}` : ''}
                     {track.license ? ` · ${track.license}` : ''}
                   </div>
-                  {track.source && (
-                    <a className="library-track-source" href={track.source} target="_blank" rel="noopener noreferrer">
-                      Source
-                    </a>
-                  )}
                 </div>
-                <button
-                  className={'btn library-track-add' + (already ? ' added' : '')}
-                  disabled={already || busy}
-                  onClick={() => handleAdd(track)}
-                  title={already ? 'Already in your show' : 'Add to show'}
-                >
-                  {already ? 'Added' : busy ? 'Adding…' : 'Add'}
-                </button>
+                {track.pending ? (
+                  <a
+                    className="btn library-track-get"
+                    href={track.source}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Opens the source so you can download this track"
+                  >
+                    Get track
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M7 17 17 7" />
+                      <path d="M8 7h9v9" />
+                    </svg>
+                  </a>
+                ) : (
+                  <button
+                    className={'btn library-track-add' + (already ? ' added' : '')}
+                    disabled={already || busy}
+                    onClick={() => handleAdd(track)}
+                    title={already ? 'Already in your show' : 'Add to show'}
+                  >
+                    {already ? 'Added' : busy ? 'Adding…' : 'Add'}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -409,9 +419,16 @@ function MusicLibrary() {
         </div>
       )}
 
+      {mood?.browseUrl && (
+        <a className="library-browse-more" href={mood.browseUrl} target="_blank" rel="noopener noreferrer">
+          Browse more {mood.name.toLowerCase()} tracks ↗
+        </a>
+      )}
+
       <div className="panel-help library-license-note">
-        Library tracks are royalty-free from their listed sources. Licenses shown are as stated by each source —
-        verify terms before public use.
+        These are suggestions, not bundled audio. <strong>Get track</strong> opens the source to download — drop the
+        file into <code>public/music/</code> to make it addable. Licenses shown are as stated by each source; verify
+        terms before public use.
       </div>
     </div>
   );

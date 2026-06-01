@@ -361,7 +361,15 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 8px;
 }
 .empty-state p { max-width: 380px; margin-bottom: 24px; line-height: 1.5; }
-.empty-state .empty-actions { display: flex; gap: 12px; }
+.empty-state .empty-actions { display: flex; gap: 10px; }
+/* Button glyphs must not inherit the big 64px empty-state icon sizing. */
+.empty-state .empty-actions svg { width: auto; height: 16px; margin-bottom: 0; color: inherit; }
+.import-btn {
+  min-width: 130px;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+}
 
 .photo-grid {
   display: grid;
@@ -684,9 +692,40 @@ input[type="range"]::-moz-range-thumb {
   opacity: 0.6;
   cursor: default;
 }
+.library-track-get {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  text-decoration: none;
+  background: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+.library-track-get:hover { background: var(--primary-dim); border-color: var(--primary); }
+.library-track-get svg { opacity: 0.85; }
+.library-browse-more {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  text-decoration: none;
+}
+.library-browse-more:hover { text-decoration: underline; }
 .library-license-note {
   margin-top: 12px;
   font-style: italic;
+}
+.library-license-note code {
+  font-style: normal;
+  background: var(--bg-elevated);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--accent);
 }
 
 /* ========== PLAYBACK OVERLAY ========== */

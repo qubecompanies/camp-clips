@@ -8,12 +8,20 @@ interface Props {
   onShowGooglePhotos: () => void;
 }
 
-const GooglePhotosIcon = () => (
-  <svg className="icon" viewBox="0 0 64 64">
-    <path d="M32 4 C20 4 16 16 16 28 L4 28 C4 16 16 4 32 4 Z" fill="#FBBC04" />
-    <path d="M60 32 C60 20 48 16 36 16 L36 4 C48 4 60 16 60 32 Z" fill="#EA4335" />
-    <path d="M32 60 C44 60 48 48 48 36 L60 36 C60 48 48 60 32 60 Z" fill="#4285F4" />
-    <path d="M4 32 C4 44 16 48 28 48 L28 60 C16 60 4 48 4 32 Z" fill="#34A853" />
+const GoogleDriveIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size * 1.12}
+    height={size}
+    viewBox="0 0 87.3 78"
+    aria-hidden="true"
+    style={{ flexShrink: 0 }}
+  >
+    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+    <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.79 1.39-1.2 2.94-1.2 4.5h27.5z" fill="#00ac47" />
+    <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
+    <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+    <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+    <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.56-.41-3.11-1.2-4.5z" fill="#ffba00" />
   </svg>
 );
 
@@ -106,11 +114,11 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
         <div className="toolbar-title">Photos</div>
         <button
           className="btn btn-ghost btn-icon"
-          title="How to import from Google Photos"
+          title="How to import from Google Drive"
           style={{ marginLeft: -6 }}
           onClick={onShowGooglePhotos}
         >
-          <GooglePhotosIcon />
+          <GoogleDriveIcon />
         </button>
         <div className="toolbar-info">
           {photos.length
@@ -179,17 +187,25 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
               <polyline points="21 15 16 10 5 21" />
             </svg>
             <h2>Add your camp photos</h2>
-            <p>Drop them here, or pick from this device. They stay in your browser — nothing uploads anywhere.</p>
+            <p>Drag photos in, or pick them below. They stay in your browser — nothing uploads anywhere.</p>
             <div className="empty-actions">
-              <button className="btn btn-primary btn-large" onClick={() => photosInputRef.current?.click()}>
-                Select Photos
+              <button className="btn btn-primary btn-large import-btn" onClick={() => photosInputRef.current?.click()}>
+                <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                Photos
               </button>
-              <button className="btn btn-large" onClick={() => folderInputRef.current?.click()}>
-                Select Folder
+              <button className="btn btn-large import-btn" onClick={() => folderInputRef.current?.click()}>
+                <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                </svg>
+                Folder
               </button>
-              <button className="btn btn-large" onClick={onShowGooglePhotos}>
-                <GooglePhotosIcon />
-                From Google Photos
+              <button className="btn btn-large import-btn" onClick={onShowGooglePhotos}>
+                <GoogleDriveIcon size={16} />
+                Google Drive
               </button>
             </div>
           </div>
