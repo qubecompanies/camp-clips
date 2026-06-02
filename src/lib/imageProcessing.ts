@@ -61,8 +61,10 @@ async function testBlobUrlSupport(): Promise<boolean> {
   return _blobUrlsWork;
 }
 
-// Convert a blob to either an Object URL (preferred) or data URL (fallback)
-async function blobToUsableUrl(blob: Blob): Promise<{ url: string; revocable: boolean }> {
+// Convert a blob to either an Object URL (preferred) or data URL (fallback).
+// Exported so the video poster pipeline (videoIngest.ts) reuses the same
+// sandbox-safe URL strategy as photos.
+export async function blobToUsableUrl(blob: Blob): Promise<{ url: string; revocable: boolean }> {
   const blobOk = await testBlobUrlSupport();
   if (blobOk) return { url: URL.createObjectURL(blob), revocable: true };
   // Fallback for sandboxed webviews

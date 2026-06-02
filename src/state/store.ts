@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { Photo, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
+import type { Photo, Clip, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
 import { processImageFile } from '../lib/imageProcessing';
+import { ingestVideo, convertToH264 } from '../lib/videoIngest';
 import { readCaptureTime } from '../lib/exif';
 import { ensureAudioCtx, getGainNode } from '../lib/audioContext';
 import { trackUrl } from '../lib/musicLibrary';
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: Settings = {
 interface AppState {
   eventName: string;
   photos: Photo[];
+  clips: Clip[];
   songs: Song[];
   sections: SectionCard[];
   intro: TextScreen;
@@ -49,13 +51,18 @@ interface AppState {
 
   // media actions
   addPhotos: (fileList: FileList | File[]) => Promise<void>;
+  addVideos: (fileList: FileList | File[]) => Promise<void>;
+  convertClip: (id: string) => Promise<void>;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
   addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
   removePhoto: (id: string) => void;
+  removeClip: (id: string) => void;
   removeSong: (id: string) => void;
   clearPhotos: () => void;
   togglePhoto: (id: string) => void;
+  toggleClip: (id: string) => void;
   reorderPhotos: (orderedIds: string[]) => void;
+  reorderClips: (orderedIds: string[]) => void;
   reorderSongs: (orderedIds: string[]) => void;
   shufflePhotos: () => void;
   sortPhotosByDate: () => void;
@@ -77,6 +84,7 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   eventName: '',
   photos: [],
+  clips: [],
   songs: [],
   sections: [],
   intro: { title: '', subtitle: '', duration: 5 },
@@ -104,13 +112,14 @@ export const useStore = create<AppState>((set, get) => ({
   addPhotos: async (fileList) => {
     const files = Array.from(fileList).filter(isImageFile);
     if (!files.length) {
-      const hadVideo = Array.from(fileList).some(isVideoFile);
-      toast(
-        hadVideo
-          ? 'Video support is coming soon — for now, add photos.'
-          : "Those don't look like image files. Try JPG, PNG, or HEIC.",
-        hadVideo ? 'info' : 'error',
-      );
+      // Videos can arrive mixed in via the folder picker; route them through the
+      // clip pipeline instead of rejecting.
+      const videos = Array.from(fileList).filter(isVideoFile);
+      if (videos.length) {
+        await get().addVideos(videos);
+      } else {
+        toast("Those don't look like image files. Try JPG, PNG, or HEIC.", 'error');
+      }
       return;
     }
 
@@ -146,6 +155,7 @@ export const useStore = create<AppState>((set, get) => ({
         const result = await processImageFile(file);
         const photo: Photo = {
           id: uid(),
+          kind: 'photo',
           name: file.name.replace(/\.(heic|heif)$/i, '.jpg'),
           url: result.url,
           revocable: result.revocable,
@@ -173,6 +183,134 @@ export const useStore = create<AppState>((set, get) => ({
       toast(`Added ${added} photos; ${failed} couldn't load.`, 'info');
     } else if (failed > 0) {
       toast(`${failed} photo${failed === 1 ? " couldn't" : "s couldn't"} load. The rest are ready.`, 'error');
+    }
+  },
+
+  addVideos: async (fileList) => {
+    const files = Array.from(fileList).filter(isVideoFile);
+    if (!files.length) {
+      toast("Those don't look like video files. Try MP4 or MOV.", 'error');
+      return;
+    }
+
+    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    toast(`Processing ${files.length} clip${files.length === 1 ? '' : 's'}…`, 'info');
+
+    let ready = 0;
+    let needsConvert = 0;
+    let failed = 0;
+    const photoDuration = get().settings.photoDuration;
+    for (const file of files) {
+      try {
+        const result = await ingestVideo(file);
+        const outPoint = result.decodable ? Math.min(result.naturalDuration, photoDuration) : 0;
+        const clip: Clip = {
+          id: uid(),
+          kind: 'clip',
+          name: file.name,
+          src: result.src,
+          revocable: result.revocable,
+          posterUrl: result.poster?.url,
+          posterRevocable: result.poster?.revocable,
+          naturalDuration: result.naturalDuration,
+          width: result.width,
+          height: result.height,
+          included: true,
+          inPoint: 0,
+          outPoint,
+          muted: false,
+          status: result.decodable ? 'ready' : 'needs-convert',
+        };
+        set((s) => ({ clips: [...s.clips, clip] }));
+        if (result.decodable) ready++;
+        else needsConvert++;
+        // Yield between clips so the browser can reclaim decode memory.
+        await new Promise((r) => setTimeout(r, 0));
+      } catch (err) {
+        console.error('Failed to ingest video', file.name, err);
+        failed++;
+      }
+    }
+
+    if (ready > 0 && needsConvert === 0 && failed === 0) {
+      toast(`Added ${ready} clip${ready === 1 ? '' : 's'}.`, 'success');
+    } else if (needsConvert > 0) {
+      toast(
+        `Added ${ready + needsConvert} clip${ready + needsConvert === 1 ? '' : 's'}. ${needsConvert} need${
+          needsConvert === 1 ? 's' : ''
+        } converting to play here (iPhone HEVC).`,
+        'info',
+      );
+    } else if (failed > 0 && ready === 0) {
+      toast(`Couldn't read ${failed} clip${failed === 1 ? '' : 's'}.`, 'error');
+    } else if (ready > 0) {
+      toast(`Added ${ready} clip${ready === 1 ? '' : 's'}; ${failed} couldn't be read.`, 'info');
+    }
+  },
+
+  convertClip: async (id) => {
+    const clip = get().clips.find((c) => c.id === id);
+    if (!clip || clip.status === 'converting') return;
+
+    // We re-fetch the original bytes from the object URL we minted at ingest.
+    let sourceFile: File;
+    try {
+      const res = await fetch(clip.src);
+      const blob = await res.blob();
+      sourceFile = new File([blob], clip.name, { type: blob.type || 'video/quicktime' });
+    } catch (err) {
+      console.error('Convert: could not read source for', clip.name, err);
+      toast(`Couldn't read "${clip.name}" to convert.`, 'error');
+      return;
+    }
+
+    set((s) => ({
+      clips: s.clips.map((c) => (c.id === id ? { ...c, status: 'converting', convertProgress: 0 } : c)),
+    }));
+    toast(`Converting "${clip.name}" on your device… this can take a minute.`, 'info');
+
+    try {
+      const mp4 = await convertToH264(sourceFile, (ratio) => {
+        set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, convertProgress: ratio } : c)) }));
+      });
+      const converted = new File([mp4], clip.name.replace(/\.[^.]+$/, '.mp4'), { type: 'video/mp4' });
+
+      // Re-ingest the H.264 result to grab a poster + true dimensions.
+      const result = await ingestVideo(converted);
+      if (!result.decodable) {
+        throw new Error('converted file still does not decode');
+      }
+      const photoDuration = get().settings.photoDuration;
+      // Revoke the old (HEVC) object URL now that we've replaced it.
+      const old = get().clips.find((c) => c.id === id);
+      if (old?.revocable) URL.revokeObjectURL(old.src);
+
+      set((s) => ({
+        clips: s.clips.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                src: result.src,
+                revocable: result.revocable,
+                posterUrl: result.poster?.url,
+                posterRevocable: result.poster?.revocable,
+                naturalDuration: result.naturalDuration,
+                width: result.width,
+                height: result.height,
+                outPoint: Math.min(result.naturalDuration, photoDuration),
+                status: 'ready',
+                convertProgress: undefined,
+              }
+            : c,
+        ),
+      }));
+      toast(`"${clip.name}" is ready to play.`, 'success');
+    } catch (err) {
+      console.error('Convert failed for', clip.name, err);
+      set((s) => ({
+        clips: s.clips.map((c) => (c.id === id ? { ...c, status: 'error', convertProgress: undefined } : c)),
+      }));
+      toast(`Couldn't convert "${clip.name}". You can still play it after converting on your computer.`, 'error');
     }
   },
 
@@ -288,6 +426,14 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }),
 
+  removeClip: (id) =>
+    set((s) => {
+      const clip = s.clips.find((c) => c.id === id);
+      if (clip?.revocable) URL.revokeObjectURL(clip.src);
+      if (clip?.posterRevocable && clip.posterUrl) URL.revokeObjectURL(clip.posterUrl);
+      return { clips: s.clips.filter((c) => c.id !== id) };
+    }),
+
   removeSong: (id) => set((s) => ({ songs: s.songs.filter((x) => x.id !== id) })),
 
   clearPhotos: () =>
@@ -303,9 +449,19 @@ export const useStore = create<AppState>((set, get) => ({
       photos: s.photos.map((p) => (p.id === id ? { ...p, included: !p.included } : p)),
     })),
 
+  toggleClip: (id) =>
+    set((s) => ({
+      clips: s.clips.map((c) => (c.id === id ? { ...c, included: !c.included } : c)),
+    })),
+
   reorderPhotos: (orderedIds) =>
     set((s) => ({
       photos: [...s.photos].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
+    })),
+
+  reorderClips: (orderedIds) =>
+    set((s) => ({
+      clips: [...s.clips].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
     })),
 
   reorderSongs: (orderedIds) =>

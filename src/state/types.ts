@@ -25,6 +25,7 @@ export interface FaceFraming {
 
 export interface Photo {
   id: string;
+  kind: 'photo'; // discriminator — lets Photo and Clip share a grid/timeline (Phase 2 unifies them)
   name: string;
   url: string;
   revocable: boolean;
@@ -36,6 +37,44 @@ export interface Photo {
   face?: FaceFraming | null; // null = detection ran and found nothing; undefined = not yet run
   capturedAt?: number; // EXIF DateTimeOriginal (epoch ms); undefined when unreadable
 }
+
+// Lifecycle of a video clip from drop to playable.
+//   ready        — decodes in this browser; poster + dimensions captured, good to go
+//   needs-convert— failed to decode (HEVC on Chrome-Windows is the usual cause);
+//                  we show guidance + an opt-in on-device Convert button
+//   converting   — ffmpeg.wasm transcode in flight (see convertProgress)
+//   error        — convert failed or the file is genuinely unreadable
+export type ClipStatus = 'ready' | 'needs-convert' | 'converting' | 'error';
+
+// A video clip. Mirrors Photo's shape where it can (id/name/included/dimensions)
+// so the two can sit side by side in the grid. Ken Burns + face framing are
+// photo-only and deliberately absent here. Clips never upload — `src`/`posterUrl`
+// are in-memory object URLs, same privacy promise as photos.
+export interface Clip {
+  id: string;
+  kind: 'clip';
+  name: string;
+  src: string; // object URL of the video (original, or the H.264 result after Convert)
+  revocable: boolean; // whether `src` is an object URL we own and must revoke
+  posterUrl?: string; // object URL of the downscaled poster frame; absent until decoded
+  posterRevocable?: boolean;
+  naturalDuration: number; // seconds; 0 until decoded
+  width: number; // 0 until decoded
+  height: number;
+  included: boolean;
+  // Trim window. Phase 1 sets inPoint=0 and outPoint=min(naturalDuration, photoDuration);
+  // Phase 5 exposes handles to widen it up to naturalDuration.
+  inPoint: number;
+  outPoint: number;
+  muted: boolean; // clip audio is played (ducking the music) unless muted
+  status: ClipStatus;
+  convertProgress?: number; // 0..1 while status === 'converting'
+  loadError?: boolean;
+}
+
+// Anything that can occupy a slot in the grid/timeline. Phase 2 will thread this
+// union through planning/playback/export; Phase 1 keeps clips in their own array.
+export type MediaItem = Photo | Clip;
 
 export interface Song {
   id: string;
