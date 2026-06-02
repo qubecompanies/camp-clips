@@ -8,34 +8,30 @@
       "browseUrl": "https://pixabay.com/music/search/upbeat/",
       "tracks": [
         {
-          "id": "upbeat-carefree",
-          "title": "Carefree",
-          "artist": "Kevin MacLeod",
-          "file": "upbeat/carefree.mp3",
-          "duration": 205,
-          "source": "https://incompetech.com/music/royalty-free/?keywords=carefree",
-          "license": "CC BY 4.0",
-          "attribution": "Carefree by Kevin MacLeod — incompetech.com — CC BY 4.0",
+          "id": "upbeat-happy-ukulele",
+          "title": "Happy Upbeat Ukulele",
+          "artist": "via Pixabay",
+          "file": "upbeat/happy-upbeat-ukulele.mp3",
+          "source": "https://pixabay.com/music/acoustic-group-happy-upbeat-ukulele-142304/",
+          "license": "Pixabay Content License",
           "pending": true
         },
         {
-          "id": "upbeat-wallpaper",
-          "title": "Wallpaper",
-          "artist": "Kevin MacLeod",
-          "file": "upbeat/wallpaper.mp3",
-          "source": "https://incompetech.com/music/royalty-free/?keywords=wallpaper",
-          "license": "CC BY 4.0",
-          "attribution": "Wallpaper by Kevin MacLeod — incompetech.com — CC BY 4.0",
+          "id": "upbeat-happy-ukulele-song",
+          "title": "Happy Ukulele Song",
+          "artist": "via Pixabay",
+          "file": "upbeat/happy-ukulele-song.mp3",
+          "source": "https://pixabay.com/music/upbeat-happy-ukulele-song-8347/",
+          "license": "Pixabay Content License",
           "pending": true
         },
         {
-          "id": "upbeat-life-of-riley",
-          "title": "Life of Riley",
-          "artist": "Kevin MacLeod",
-          "file": "upbeat/life-of-riley.mp3",
-          "source": "https://incompetech.com/music/royalty-free/?keywords=life%20of%20riley",
-          "license": "CC BY 4.0",
-          "attribution": "Life of Riley by Kevin MacLeod — incompetech.com — CC BY 4.0",
+          "id": "upbeat-good-stride",
+          "title": "Good Stride",
+          "artist": "via Pixabay",
+          "file": "upbeat/good-stride.mp3",
+          "source": "https://pixabay.com/music/happy-childrens-tunes-good-stride-ukulele-summer-happy-upbeat-302663/",
+          "license": "Pixabay Content License",
           "pending": true
         }
       ]
@@ -47,33 +43,21 @@
       "browseUrl": "https://pixabay.com/music/search/cinematic/",
       "tracks": [
         {
-          "id": "cinematic-heroic-age",
-          "title": "Heroic Age",
-          "artist": "Kevin MacLeod",
-          "file": "cinematic/heroic-age.mp3",
-          "source": "https://incompetech.com/music/royalty-free/?keywords=heroic%20age",
-          "license": "CC BY 4.0",
-          "attribution": "Heroic Age by Kevin MacLeod — incompetech.com — CC BY 4.0",
+          "id": "cinematic-inspiring-ambient",
+          "title": "Inspiring Cinematic Ambient",
+          "artist": "via Pixabay",
+          "file": "cinematic/inspiring-cinematic-ambient.mp3",
+          "source": "https://pixabay.com/music/beautiful-plays-inspiring-cinematic-ambient-116199/",
+          "license": "Pixabay Content License",
           "pending": true
         },
         {
-          "id": "cinematic-the-descent",
-          "title": "The Descent",
-          "artist": "Kevin MacLeod",
-          "file": "cinematic/the-descent.mp3",
-          "source": "https://incompetech.com/music/royalty-free/?keywords=the%20descent",
-          "license": "CC BY 4.0",
-          "attribution": "The Descent by Kevin MacLeod — incompetech.com — CC BY 4.0",
-          "pending": true
-        },
-        {
-          "id": "cinematic-impact-prelude",
-          "title": "Impact Prelude",
-          "artist": "Kevin MacLeod",
-          "file": "cinematic/impact-prelude.mp3",
-          "source": "https://incompetech.com/music/royalty-free/?keywords=impact%20prelude",
-          "license": "CC BY 4.0",
-          "attribution": "Impact Prelude by Kevin MacLeod — incompetech.com — CC BY 4.0",
+          "id": "cinematic-inspiring-emotional",
+          "title": "Cinematic Inspiring Emotional",
+          "artist": "via Pixabay",
+          "file": "cinematic/cinematic-inspiring-emotional.mp3",
+          "source": "https://pixabay.com/music/upbeat-cinematic-ambient-corporate-inspiring-emotional-125960/",
+          "license": "Pixabay Content License",
           "pending": true
         }
       ]
@@ -85,21 +69,20 @@
       "browseUrl": "https://pixabay.com/music/search/acoustic/",
       "tracks": [
         {
-          "id": "warm-cipher",
-          "title": "Cipher",
-          "artist": "Kevin MacLeod",
-          "file": "warm/cipher.mp3",
-          "source": "https://incompetech.com/music/royalty-free/?keywords=cipher",
-          "license": "CC BY 4.0",
-          "attribution": "Cipher by Kevin MacLeod — incompetech.com — CC BY 4.0",
+          "id": "warm-positive-ukulele",
+          "title": "Happy Positive Ukulele",
+          "artist": "via Pixabay",
+          "file": "warm/happy-positive-ukulele.mp3",
+          "source": "https://pixabay.com/music/folk-happy-positive-upbeat-ukulele-152845/",
+          "license": "Pixabay Content License",
           "pending": true
         },
         {
-          "id": "warm-pixabay-acoustic",
-          "title": "Browse acoustic & folk on Pixabay",
-          "artist": "Various (Pixabay)",
-          "file": "warm/_pixabay-acoustic.mp3",
-          "source": "https://pixabay.com/music/search/acoustic/",
+          "id": "warm-acoustic-folk",
+          "title": "Acoustic Upbeat Folk",
+          "artist": "via Pixabay",
+          "file": "warm/acoustic-upbeat-folk.mp3",
+          "source": "https://pixabay.com/music/happy-childrens-tunes-acoustic-upbeat-folk-happy-feels-113869/",
           "license": "Pixabay Content License",
           "pending": true
         }
@@ -112,31 +95,29 @@
       "browseUrl": "https://pixabay.com/music/search/ambient/",
       "tracks": [
         {
-          "id": "reflective-clair-de-lune",
-          "title": "Clair de Lune (Debussy)",
-          "artist": "Claude Debussy (public-domain composition)",
-          "file": "reflective/clair-de-lune.mp3",
-          "source": "https://musopen.org/music/3838-suite-bergamasque/",
-          "license": "Public Domain (verify recording)",
-          "attribution": "Clair de Lune by Claude Debussy — recording via Musopen",
+          "id": "reflective-minimal-piano",
+          "title": "Minimal Emotional Piano",
+          "artist": "via Pixabay",
+          "file": "reflective/minimal-emotional-piano.mp3",
+          "source": "https://pixabay.com/music/small-emotions-minimal-piano-emotional-ambient-cinematic-peaceful-calm-smooth-117301/",
+          "license": "Pixabay Content License",
           "pending": true
         },
         {
-          "id": "reflective-gymnopedie-1",
-          "title": "Gymnopédie No. 1 (Satie)",
-          "artist": "Erik Satie (public-domain composition)",
-          "file": "reflective/gymnopedie-1.mp3",
-          "source": "https://musopen.org/music/2585-gymnopedies/",
-          "license": "Public Domain (verify recording)",
-          "attribution": "Gymnopédie No. 1 by Erik Satie — recording via Musopen",
+          "id": "reflective-ambient-emotional-piano",
+          "title": "Ambient Emotional Piano",
+          "artist": "via Pixabay",
+          "file": "reflective/ambient-emotional-piano.mp3",
+          "source": "https://pixabay.com/music/beautiful-plays-ambient-emotional-piano-136100/",
+          "license": "Pixabay Content License",
           "pending": true
         },
         {
-          "id": "reflective-pixabay-ambient",
-          "title": "Browse ambient & piano on Pixabay",
-          "artist": "Various (Pixabay)",
-          "file": "reflective/_pixabay-ambient.mp3",
-          "source": "https://pixabay.com/music/search/ambient/",
+          "id": "reflective-dream-piano",
+          "title": "Dream",
+          "artist": "via Pixabay",
+          "file": "reflective/dream-ambient-piano.mp3",
+          "source": "https://pixabay.com/music/solo-piano-dream-inspiring-emotional-ambient-piano-219617/",
           "license": "Pixabay Content License",
           "pending": true
         }
