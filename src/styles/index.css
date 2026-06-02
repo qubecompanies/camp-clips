@@ -336,6 +336,8 @@ input[type="range"]::-moz-range-thumb {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  display: flex;
+  flex-direction: column;
 }
 
 .empty-state {
@@ -346,7 +348,11 @@ input[type="range"]::-moz-range-thumb {
   text-align: center;
   padding: 60px 20px;
   color: var(--text-secondary);
-  height: 100%;
+  /* Fill the space left after the clips strip (flex column parent) rather than a
+     hard 100%, so the two never fight over height. With no clips it still fills
+     the whole area. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .empty-state svg {
   width: 64px; height: 64px;
@@ -556,8 +562,10 @@ input[type="range"]::-moz-range-thumb {
 
 /* ========== VIDEO CLIPS STRIP ========== */
 /* Clips live in their own section above the photo grid for now. Phase 2 will
-   merge them into a single timeline. */
-.clips-section { margin-bottom: 20px; }
+   merge them into a single timeline. order:-1 keeps the strip pinned to the top
+   of the scroll area even when the full-height "add photos" empty state is
+   showing (otherwise the empty state pushes the strip below the fold). */
+.clips-section { margin-bottom: 20px; order: -1; flex-shrink: 0; }
 .clips-section-head {
   display: flex;
   align-items: center;

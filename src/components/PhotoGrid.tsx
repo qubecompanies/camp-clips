@@ -85,6 +85,11 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
       animation: 180,
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
+      // Don't let a drag start on the action buttons — otherwise Sortable can
+      // swallow the click. preventOnFilter:false lets the button's native click
+      // through instead of calling preventDefault on it.
+      filter: '.convert-btn, .remove-btn',
+      preventOnFilter: false,
       onEnd: (evt) => {
         const { oldIndex, newIndex, from, item } = evt;
         if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
@@ -338,7 +343,15 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                           </svg>
                           <span>This clip’s format (likely iPhone HEVC) can’t play here yet.</span>
                         </div>
-                        <button className="btn btn-primary btn-sm convert-btn">Convert on device</button>
+                        <button
+                          className="btn btn-primary btn-sm convert-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            convertClip(clip.id);
+                          }}
+                        >
+                          Convert on device
+                        </button>
                       </div>
                     )}
 
@@ -356,12 +369,27 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                         <div className="clip-convert-msg">
                           <span>Conversion failed. Try converting it on your computer, then re-add.</span>
                         </div>
-                        <button className="btn btn-sm convert-btn">Retry</button>
+                        <button
+                          className="btn btn-sm convert-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            convertClip(clip.id);
+                          }}
+                        >
+                          Retry
+                        </button>
                       </div>
                     )}
 
                     <div className="photo-actions">
-                      <button className="photo-action-btn remove-btn" title="Remove">
+                      <button
+                        className="photo-action-btn remove-btn"
+                        title="Remove"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeClip(clip.id);
+                        }}
+                      >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <line x1="18" y1="6" x2="6" y2="18" />
                           <line x1="6" y1="6" x2="18" y2="18" />
