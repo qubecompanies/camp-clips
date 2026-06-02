@@ -17,6 +17,7 @@ export function PlaybackOverlay() {
   const progressRef = useRef<HTMLDivElement>(null);
   const imgARef = useRef<HTMLImageElement>(null);
   const imgBRef = useRef<HTMLImageElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const textOverlayRef = useRef<HTMLDivElement>(null);
   const textTitleRef = useRef<HTMLHeadingElement>(null);
   const textSubtitleRef = useRef<HTMLParagraphElement>(null);
@@ -27,6 +28,7 @@ export function PlaybackOverlay() {
       progressRef.current &&
       imgARef.current &&
       imgBRef.current &&
+      videoRef.current &&
       textOverlayRef.current &&
       textTitleRef.current &&
       textSubtitleRef.current
@@ -35,6 +37,7 @@ export function PlaybackOverlay() {
         overlay: overlayRef.current,
         imgA: imgARef.current,
         imgB: imgBRef.current,
+        video: videoRef.current,
         textOverlay: textOverlayRef.current,
         textOverlayTitle: textTitleRef.current,
         textOverlaySubtitle: textSubtitleRef.current,
@@ -84,6 +87,7 @@ export function PlaybackOverlay() {
         <div className="playback-images">
           <img ref={imgARef} alt="" />
           <img ref={imgBRef} alt="" />
+          <video ref={videoRef} className="playback-video" playsInline preload="auto" />
         </div>
         <div className="playback-text-overlay" ref={textOverlayRef}>
           <h1 ref={textTitleRef} />

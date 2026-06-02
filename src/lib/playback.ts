@@ -2,17 +2,17 @@ import { useStore } from '../state/store';
 import {
   buildPlaybackList,
   getIncludedSongs,
-  getIncludedPhotos,
+  getIncludedMedia,
   computePlan,
   sectionMap,
   sectionTimeForList,
 } from './planning';
 import { applyLiveKenBurns, cancelKbAnims, pauseKbAnims, resumeKbAnims } from './kenBurns';
-import { ensureAudioCtx, getAudioCtx, unlockAudio } from './audioContext';
+import { ensureAudioCtx, getAudioCtx, getGainNode, unlockAudio } from './audioContext';
 import { TEMPLATES } from './templates';
 import { sleep } from './utils';
 import { toast } from '../state/toastStore';
-import type { Photo, Song } from '../state/types';
+import type { Photo, Clip, MediaItem, Song } from '../state/types';
 
 // ============ PLAYBACK ENGINE ============
 // Ported verbatim from the prototype. Operates on the real DOM nodes the
@@ -29,6 +29,7 @@ interface PlaybackRefs {
   overlay: HTMLElement;
   imgA: KbImg;
   imgB: KbImg;
+  video: HTMLVideoElement;
   textOverlay: HTMLElement;
   textOverlayTitle: HTMLElement;
   textOverlaySubtitle: HTMLElement;
@@ -80,8 +81,8 @@ export function clearPlaybackRefs(): void {
 
 export async function startPlayback(): Promise<void> {
   if (!refs) return;
-  if (!getIncludedPhotos().length) {
-    toast('Add some photos first.', 'error');
+  if (!getIncludedMedia().length) {
+    toast('Add some photos or clips first.', 'error');
     return;
   }
 
@@ -120,11 +121,25 @@ export async function startPlayback(): Promise<void> {
 
 export function stopPlayback(): void {
   if (!refs) return;
-  const { overlay, imgA, imgB, textOverlay, playbackProgress } = refs;
+  const { overlay, imgA, imgB, video, textOverlay, playbackProgress } = refs;
 
   useStore.getState().setPlayback({ active: false });
   if (playbackController) playbackController.cancelled = true;
   clearPreload();
+  // Stop & detach the clip video so its decoder + audio release immediately.
+  try {
+    video.pause();
+  } catch (e) {
+    /* ignore */
+  }
+  video.classList.remove('visible');
+  video.removeAttribute('src');
+  try {
+    video.load();
+  } catch (e) {
+    /* ignore */
+  }
+  duckMusic(1); // restore music gain in case we stopped mid-clip while ducked
   overlay.classList.remove('active');
   cancelKbAnims([imgA, imgB]);
   imgA.style.transform = 'none';
@@ -174,7 +189,7 @@ async function waitForUnpaused(controller: { cancelled: boolean }): Promise<void
 }
 
 async function runSlideshowSequence(
-  photos: Photo[],
+  items: MediaItem[],
   holdSec: number,
   controller: { cancelled: boolean },
 ): Promise<void> {
@@ -182,15 +197,21 @@ async function runSlideshowSequence(
   const { playbackProgress } = refs;
   const { intro, outro, settings } = useStore.getState();
   const looped = computePlan().looped;
-  const cards = sectionMap(photos, looped);
-  // Warm the first photo while the intro card is on screen.
-  if (photos.length) preloadPhoto(photos[0].url);
+  const cards = sectionMap(items, looped);
+  // Warm the first photo while the intro card is on screen (only if it's a photo).
+  if (items.length && items[0].kind === 'photo') preloadPhoto(items[0].url);
+  // Each item costs its own screen time: photos hold for `holdSec`, clips play
+  // their trimmed window. Plus one transition between adjacent items.
+  let mediaTime = 0;
+  for (const it of items) {
+    mediaTime += it.kind === 'clip' ? Math.max(0, it.outPoint - it.inPoint) : holdSec;
+  }
   const totalDuration =
     intro.duration +
     outro.duration +
-    photos.length * holdSec +
-    Math.max(0, photos.length - 1) * settings.transitionDuration +
-    sectionTimeForList(photos, looped);
+    mediaTime +
+    Math.max(0, items.length - 1) * settings.transitionDuration +
+    sectionTimeForList(items, looped);
   const startTime = performance.now();
   const progressTimer = window.setInterval(() => {
     if (controller.cancelled) {
@@ -210,24 +231,31 @@ async function runSlideshowSequence(
     }
   }
 
-  // PHOTOS with cross-fade + Ken Burns motion
-  for (let i = 0; i < photos.length; i++) {
+  // MEDIA — photos cross-fade with Ken Burns; clips play inline (audio ducks music)
+  for (let i = 0; i < items.length; i++) {
     if (controller.cancelled) break;
     await waitForUnpaused(controller);
-    // A section card anchored to this photo plays first: fade the current photo
-    // to black, show the card, then the photo fades in (crossfade-from-black).
-    const card = cards.get(photos[i].id);
+    const item = items[i];
+    // A section card anchored to this item plays first: fade to black, show the
+    // card, then the item fades in (crossfade-from-black).
+    const card = cards.get(item.id);
     if (card) {
       await fadeImagesOut(settings.transitionDuration);
       if (controller.cancelled) break;
       await showTextScreen(card.title, card.subtitle, card.duration, controller);
       if (controller.cancelled) break;
     }
-    await crossfadeToPhoto(photos[i], settings.transitionDuration, holdSec, controller);
-    if (controller.cancelled) break;
-    // Decode the NEXT photo during this hold so its slide starts jank-free.
-    if (i + 1 < photos.length) preloadPhoto(photos[i + 1].url);
-    await waitWithPause(holdSec * 1000, controller);
+    if (item.kind === 'clip') {
+      await crossfadeToClip(item, settings.transitionDuration, controller);
+      if (controller.cancelled) break;
+    } else {
+      await crossfadeToPhoto(item, settings.transitionDuration, holdSec, controller);
+      if (controller.cancelled) break;
+      await waitWithPause(holdSec * 1000, controller);
+    }
+    // Decode the NEXT photo during this slide so it starts jank-free.
+    const next = items[i + 1];
+    if (next && next.kind === 'photo') preloadPhoto(next.url);
   }
 
   // OUTRO
@@ -238,6 +266,109 @@ async function runSlideshowSequence(
 
   clearInterval(progressTimer);
   playbackProgress.style.width = '100%';
+}
+
+// Smoothly ramp the music gain. multiplier 0.3 ducks under a clip's own audio;
+// 1 restores. setTargetAtTime gives a gentle ~0.15s glide instead of a click.
+function duckMusic(multiplier: number): void {
+  const gain = getGainNode();
+  const ctx = getAudioCtx();
+  if (!gain || !ctx) return;
+  const base = useStore.getState().settings.musicVolume;
+  try {
+    gain.gain.setTargetAtTime(base * multiplier, ctx.currentTime, 0.15);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+// Play one clip inline: seek to its in-point, fade the <video> in over the
+// images, run until the out-point (honoring pause), duck the music under the
+// clip's own audio, then fade back out. Clips are fixed-length — no hold after.
+async function crossfadeToClip(
+  clip: Clip,
+  transSec: number,
+  controller: { cancelled: boolean },
+): Promise<void> {
+  if (!refs) return;
+  const { video, imgA, imgB, textOverlay } = refs;
+  const { settings } = useStore.getState();
+  textOverlay.classList.remove('visible');
+
+  video.style.objectFit = settings.photoFit; // match the photo framing choice
+  video.muted = clip.muted;
+  video.src = clip.src;
+  // Seek to the in-point and wait until a frame is actually ready to show.
+  try {
+    video.currentTime = clip.inPoint;
+  } catch (e) {
+    /* ignore */
+  }
+  await new Promise<void>((res) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      video.onseeked = null;
+      video.onloadeddata = null;
+      video.onerror = null;
+      res();
+    };
+    video.onseeked = finish;
+    video.onloadeddata = finish;
+    video.onerror = finish;
+    window.setTimeout(finish, 2500); // safety: never hang the show on a bad clip
+  });
+  if (controller.cancelled) return;
+
+  // Reveal the clip; hide the still images underneath.
+  video.classList.add('visible');
+  imgA.classList.remove('visible');
+  imgB.classList.remove('visible');
+  if (!clip.muted) duckMusic(0.3);
+
+  try {
+    await video.play();
+  } catch (e) {
+    /* autoplay may reject; the loop below still advances on currentTime */
+  }
+
+  // Hold the clip on screen until its out-point, pausing in lockstep with the show.
+  while (!controller.cancelled) {
+    if (useStore.getState().playback.paused) {
+      if (!video.paused) video.pause();
+      await sleep(80);
+      continue;
+    }
+    if (video.paused && !video.ended) {
+      try {
+        await video.play();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    if (video.ended || video.currentTime >= clip.outPoint) break;
+    await sleep(80);
+  }
+
+  try {
+    video.pause();
+  } catch (e) {
+    /* ignore */
+  }
+  if (!clip.muted) duckMusic(1); // restore music
+
+  // Fade the clip out, then release its decoder before the next item.
+  video.classList.remove('visible');
+  await sleep(transSec * 1000);
+  if (!controller.cancelled) {
+    video.removeAttribute('src');
+    try {
+      video.load();
+    } catch (e) {
+      /* ignore */
+    }
+  }
 }
 
 async function waitWithPause(ms: number, controller: { cancelled: boolean }): Promise<void> {

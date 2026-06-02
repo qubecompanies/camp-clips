@@ -4,7 +4,7 @@ import { ensureKbPlan, drawKB } from './kenBurns';
 import { TEMPLATES } from './templates';
 import { sleep, fmtTime, easeInOut } from './utils';
 import { toast } from '../state/toastStore';
-import type { KbPlan, ExportAspect, ExportRes } from '../state/types';
+import type { KbPlan, ExportAspect, ExportRes, Photo } from '../state/types';
 
 // Map the chosen aspect + resolution to canvas pixels and a target bitrate.
 // `exportRes` is treated as the SHORT edge (the conventional meaning of
@@ -273,8 +273,11 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   const { settings, intro, outro, eventName } = useStore.getState();
   onProgress(0, 'Preparing canvas…');
 
-  // Build the same shuffled/capped photo list the preview uses
-  const { list: photos, hold: effHold } = buildPlaybackList();
+  // Build the same shuffled/capped list the preview uses. Clip rendering in the
+  // exported file is Phase 4 — for now the encoder draws photos only and skips
+  // clips. (Live preview already plays clips; export will catch up next phase.)
+  const { list, hold: effHold } = buildPlaybackList();
+  const photos = list.filter((m): m is Photo => m.kind === 'photo');
   // Section title cards interleaved before their anchor photos (linear runs only).
   const looped = computePlan().looped;
   const cards = sectionMap(photos, looped);

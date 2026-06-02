@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useStore } from '../state/store';
-import { computePlan, getIncludedPhotos, getIncludedSongs } from '../lib/planning';
+import { computePlan, getIncludedPhotos, getIncludedClips, getIncludedSongs, totalClipSeconds } from '../lib/planning';
 import { saveProject, loadProject } from '../lib/persistence';
 import { fmtTime } from '../lib/utils';
 
@@ -21,12 +21,19 @@ export function AppHeader({ onPlay, onExport }: Props) {
   const loadInputRef = useRef<HTMLInputElement>(null);
 
   const photoCount = getIncludedPhotos().length;
+  const clipCount = getIncludedClips().length;
   const songCount = getIncludedSongs().length;
   const introDur = intro.title ? intro.duration : 0;
   const outroDur = outro.title ? outro.duration : 0;
   const plan = computePlan();
+  // Clips play their fixed trimmed length on top of the flexed photo budget.
+  const slideCount = plan.count + clipCount;
   const totalSec =
-    introDur + outroDur + plan.count * plan.hold + Math.max(0, plan.count - 1) * settings.transitionDuration;
+    introDur +
+    outroDur +
+    plan.count * plan.hold +
+    totalClipSeconds() +
+    Math.max(0, slideCount - 1) * settings.transitionDuration;
 
   // Reference media/songs so eslint/ts treats the subscriptions as used
   void media;
@@ -57,6 +64,11 @@ export function AppHeader({ onPlay, onExport }: Props) {
         <div className="stat">
           <strong>{photoCount}</strong> photos
         </div>
+        {clipCount > 0 && (
+          <div className="stat">
+            <strong>{clipCount}</strong> clip{clipCount === 1 ? '' : 's'}
+          </div>
+        )}
         <div className="stat">
           <strong>{songCount}</strong> songs
         </div>

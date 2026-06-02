@@ -969,6 +969,20 @@ input[type="range"]::-moz-range-thumb {
 .playback-images img.kb-contain { object-fit: contain; }
 .playback-images img.visible { opacity: 1; }
 
+/* Clip video sits in the same stage as the still images, fading in over them
+   when a clip plays. object-fit is set inline to match the photo framing. */
+.playback-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  background: #000;
+  transition: opacity var(--fade-duration, 1500ms) ease-in-out;
+}
+.playback-video.visible { opacity: 1; }
+
 .playback-text-overlay {
   position: absolute;
   inset: 0;

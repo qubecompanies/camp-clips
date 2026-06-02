@@ -1,6 +1,6 @@
 import { useStore, selectPhotos } from '../state/store';
 import { shuffle } from './utils';
-import type { Photo, ShowLength, SectionCard } from '../state/types';
+import type { Photo, Clip, MediaItem, ShowLength, SectionCard } from '../state/types';
 
 // Fade-out length (seconds) we play on the outgoing photo before a section card.
 // Matches the outro's fade-out so the timing math stays honest.
@@ -8,6 +8,19 @@ const SECTION_FADE = 0.8;
 
 export function getIncludedPhotos(): Photo[] {
   return selectPhotos(useStore.getState()).filter((p) => p.included);
+}
+// All included media (photos + clips) in their stored grid order.
+export function getIncludedMedia(): MediaItem[] {
+  return useStore.getState().media.filter((m) => m.included);
+}
+export function getIncludedClips(): Clip[] {
+  return useStore.getState().media.filter((m): m is Clip => m.kind === 'clip' && m.included);
+}
+// Total fixed playback cost of all clips: each clip plays its full trimmed
+// window (outPoint - inPoint). "Clips fixed, photos flex" — this time is carved
+// out of the budget first, then photos flex into whatever remains.
+export function totalClipSeconds(): number {
+  return getIncludedClips().reduce((sum, c) => sum + Math.max(0, c.outPoint - c.inPoint), 0);
 }
 export function getIncludedSongs() {
   return useStore.getState().songs.filter((s) => s.included);
@@ -22,14 +35,14 @@ export function totalIncludedSongSeconds(): number {
 // (Shuffling scrambles the anchor order; looping repeats photos, which would
 // repeat or misplace a card.) These helpers return the cards that will actually
 // show for a given run, so playback/export/time-math all agree.
-export function sectionsForList(list: Photo[], looped: boolean): SectionCard[] {
+export function sectionsForList(list: MediaItem[], looped: boolean): SectionCard[] {
   const { sections, settings } = useStore.getState();
   if (!sections.length || settings.shuffleOnPlay || looped) return [];
   const ids = new Set(list.map((p) => p.id));
   return sections.filter((c) => ids.has(c.beforePhotoId));
 }
 
-export function sectionMap(list: Photo[], looped: boolean): Map<string, SectionCard> {
+export function sectionMap(list: MediaItem[], looped: boolean): Map<string, SectionCard> {
   const m = new Map<string, SectionCard>();
   for (const c of sectionsForList(list, looped)) {
     if (!m.has(c.beforePhotoId)) m.set(c.beforePhotoId, c);
@@ -38,7 +51,7 @@ export function sectionMap(list: Photo[], looped: boolean): Map<string, SectionC
 }
 
 // Seconds the active section cards add to a run (card hold + its lead-in fade).
-export function sectionTimeForList(list: Photo[], looped: boolean): number {
+export function sectionTimeForList(list: MediaItem[], looped: boolean): number {
   const cards = sectionsForList(list, looped);
   return cards.reduce((sum, c) => sum + c.duration + SECTION_FADE, 0);
 }
@@ -78,8 +91,13 @@ export function computePlan(): Plan {
         .getState()
         .sections.filter((c) => includedIds.has(c.beforePhotoId))
         .reduce((sum, c) => sum + c.duration + 0.8, 0);
+  // Clips are fixed-cost: their full trimmed length plus one transition each is
+  // carved out of the budget before photos get to flex into the remainder.
+  const clips = getIncludedClips();
+  const clipCost =
+    clips.reduce((sum, c) => sum + Math.max(0, c.outPoint - c.inPoint), 0) + clips.length * trans;
   const target = mode === 'time' ? settings.timeLimitMin * 60 : totalIncludedSongSeconds();
-  const budget = Math.max(perCost, target - introDur - outroDur - sectionDur);
+  const budget = Math.max(perCost, target - introDur - outroDur - sectionDur - clipCost);
   const naturalTime = P * perCost;
 
   if (budget >= naturalTime) {
@@ -160,25 +178,51 @@ function fmt(s: number): string {
   return `${m}:${r.toString().padStart(2, '0')}`;
 }
 
-// Build the actual ordered photo list for one play/export run.
-export function buildPlaybackList(): { list: Photo[]; hold: number } {
+// Build the actual ordered media list for one play/export run.
+//
+// LINEAR (not shuffled, not looped): clips keep their interleaved positions in
+// the grid; the first `plan.count` photos show in their stored order, threaded
+// around the clips. This is the "interleave anywhere" model.
+//
+// SHUFFLED or LOOPED: photo order is scrambled/repeated, so clips can no longer
+// hold a meaningful position — they're appended after the photo list. (Same
+// documented limitation as section cards, which also only honor linear order.)
+export function buildPlaybackList(): { list: MediaItem[]; hold: number } {
   const { settings } = useStore.getState();
-  const base = getIncludedPhotos();
+  const photos = getIncludedPhotos();
+  const clips = getIncludedClips();
   const plan = computePlan();
   const doShuffle = settings.shuffleOnPlay;
 
-  if (plan.looped && plan.count > base.length) {
-    // Repeat the pool (reshuffled each pass) until we fill the slots
-    const list: Photo[] = [];
+  if (plan.looped && plan.count > photos.length) {
+    // Repeat the photo pool (reshuffled each pass) until we fill the slots,
+    // then append the clips.
+    const list: MediaItem[] = [];
     while (list.length < plan.count) {
-      const chunk = doShuffle ? shuffle(base.slice()) : base.slice();
+      const chunk = doShuffle ? shuffle(photos.slice()) : photos.slice();
       for (const p of chunk) {
         if (list.length < plan.count) list.push(p);
       }
     }
-    return { list, hold: plan.hold };
+    return { list: [...list, ...clips], hold: plan.hold };
   }
 
-  const pool = doShuffle ? shuffle(base.slice()) : base.slice();
-  return { list: pool.slice(0, plan.count), hold: plan.hold };
+  if (doShuffle) {
+    const pool = shuffle(photos.slice()).slice(0, plan.count);
+    return { list: [...pool, ...clips], hold: plan.hold };
+  }
+
+  // Linear: walk the grid order, keep every clip, keep the first `plan.count`
+  // photos in place.
+  const list: MediaItem[] = [];
+  let photosLeft = plan.count;
+  for (const m of getIncludedMedia()) {
+    if (m.kind === 'clip') {
+      list.push(m);
+    } else if (photosLeft > 0) {
+      list.push(m);
+      photosLeft--;
+    }
+  }
+  return { list, hold: plan.hold };
 }
