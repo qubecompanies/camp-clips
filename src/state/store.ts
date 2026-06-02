@@ -5,7 +5,30 @@ import { readCaptureTime } from '../lib/exif';
 import { ensureAudioCtx, getGainNode } from '../lib/audioContext';
 import { trackUrl } from '../lib/musicLibrary';
 import { isImageFile, isAudioFile, isVideoFile, uid, shuffle } from '../lib/utils';
+import { loadPersistedSettings, persistSettings } from '../lib/preferences';
 import { toast } from './toastStore';
+
+// Defaults the app falls back to on first run (or when a persisted blob is
+// missing/older keys). Persisted preferences are merged OVER these at startup,
+// so unknown/older keys degrade gracefully to the default.
+const DEFAULT_SETTINGS: Settings = {
+  photoDuration: 4,
+  transitionDuration: 1.5,
+  musicVolume: 0.7,
+  loopMusic: true,
+  kenBurns: true,
+  kenBurnsIntensity: 0.09, // moderate: ~9% zoom
+  shuffleOnPlay: false,
+  showLength: 'all',
+  timeLimitMin: 5,
+  fillBehavior: 'loop',
+  photoFit: 'contain', // default: show the whole photo (letterbox), quality over fill
+  theme: 'light',
+  exportRes: 1080,
+  exportFmt: 'webm',
+  exportAspect: '16:9',
+  templateId: 'default',
+};
 
 interface AppState {
   eventName: string;
@@ -58,24 +81,9 @@ export const useStore = create<AppState>((set, get) => ({
   sections: [],
   intro: { title: '', subtitle: '', duration: 5 },
   outro: { title: '', subtitle: '', duration: 5 },
-  settings: {
-    photoDuration: 4,
-    transitionDuration: 1.5,
-    musicVolume: 0.7,
-    loopMusic: true,
-    kenBurns: true,
-    kenBurnsIntensity: 0.09, // moderate: ~9% zoom
-    shuffleOnPlay: false,
-    showLength: 'all',
-    timeLimitMin: 5,
-    fillBehavior: 'loop',
-    photoFit: 'contain', // default: show the whole photo (letterbox), quality over fill
-    theme: 'light',
-    exportRes: 1080,
-    exportFmt: 'webm',
-    exportAspect: '16:9',
-    templateId: 'default',
-  },
+  // Merge any persisted preferences over the defaults so the app remembers the
+  // user's last setup (framing, durations, motion, theme, export defaults).
+  settings: { ...DEFAULT_SETTINGS, ...(loadPersistedSettings() ?? {}) },
   playback: { active: false, paused: false },
 
   setEventName: (v) => set({ eventName: v }),
@@ -88,6 +96,8 @@ export const useStore = create<AppState>((set, get) => ({
       const gain = getGainNode();
       if (gain) gain.gain.value = patch.musicVolume;
     }
+    // Silently remember the user's preferences (debounced; see preferences.ts).
+    persistSettings(get().settings);
   },
   setPlayback: (patch) => set((s) => ({ playback: { ...s.playback, ...patch } })),
 
