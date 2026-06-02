@@ -588,7 +588,9 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
 }
 .clip-card {
-  aspect-ratio: 16 / 9;
+  /* Square to match photo tiles — photos and clips now share one grid, so equal
+     cells keep rows tidy. The wider poster is object-fit:cover'd into the square. */
+  aspect-ratio: 1;
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
   overflow: hidden;

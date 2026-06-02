@@ -13,7 +13,7 @@ export function AppHeader({ onPlay, onExport }: Props) {
   const eventName = useStore((s) => s.eventName);
   const setEventName = useStore((s) => s.setEventName);
   // Subscribe to the slices that affect the duration readout
-  const photos = useStore((s) => s.photos);
+  const media = useStore((s) => s.media);
   const songs = useStore((s) => s.songs);
   const settings = useStore((s) => s.settings);
   const intro = useStore((s) => s.intro);
@@ -28,8 +28,8 @@ export function AppHeader({ onPlay, onExport }: Props) {
   const totalSec =
     introDur + outroDur + plan.count * plan.hold + Math.max(0, plan.count - 1) * settings.transitionDuration;
 
-  // Reference photos/songs so eslint/ts treats the subscriptions as used
-  void photos;
+  // Reference media/songs so eslint/ts treats the subscriptions as used
+  void media;
   void songs;
 
   return (

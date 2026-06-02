@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Photo, Clip, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
+import type { Photo, Clip, MediaItem, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
 import { processImageFile } from '../lib/imageProcessing';
 import { ingestVideo, convertToH264 } from '../lib/videoIngest';
 import { readCaptureTime } from '../lib/exif';
@@ -31,10 +31,12 @@ const DEFAULT_SETTINGS: Settings = {
   templateId: 'default',
 };
 
-interface AppState {
+export interface AppState {
   eventName: string;
-  photos: Photo[];
-  clips: Clip[];
+  // ONE ordered list of everything that occupies a slide slot: photos and clips,
+  // freely interleaved. The unified grid renders this in order; playback walks it.
+  // Use the selectPhotos/selectClips helpers below for filtered views.
+  media: MediaItem[];
   songs: Song[];
   sections: SectionCard[];
   intro: TextScreen;
@@ -55,17 +57,14 @@ interface AppState {
   convertClip: (id: string) => Promise<void>;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
   addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
-  removePhoto: (id: string) => void;
-  removeClip: (id: string) => void;
+  removeMedia: (id: string) => void;
   removeSong: (id: string) => void;
-  clearPhotos: () => void;
-  togglePhoto: (id: string) => void;
-  toggleClip: (id: string) => void;
-  reorderPhotos: (orderedIds: string[]) => void;
-  reorderClips: (orderedIds: string[]) => void;
+  clearMedia: () => void;
+  toggleMedia: (id: string) => void;
+  reorderMedia: (orderedIds: string[]) => void;
   reorderSongs: (orderedIds: string[]) => void;
-  shufflePhotos: () => void;
-  sortPhotosByDate: () => void;
+  shuffleMedia: () => void;
+  sortByDate: () => void;
 
   // section title cards
   addSection: (beforePhotoId: string) => void;
@@ -83,8 +82,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   eventName: '',
-  photos: [],
-  clips: [],
+  media: [],
   songs: [],
   sections: [],
   intro: { title: '', subtitle: '', duration: 5 },
@@ -165,7 +163,7 @@ export const useStore = create<AppState>((set, get) => ({
           capturedAt,
           face: result.face,
         };
-        set((s) => ({ photos: [...s.photos, photo] }));
+        set((s) => ({ media: [...s.media, photo] }));
         added++;
         // CRITICAL: yield to the browser so it can garbage-collect between photos.
         // Without this, the loop runs hot and memory keeps climbing even though
@@ -221,7 +219,7 @@ export const useStore = create<AppState>((set, get) => ({
           muted: false,
           status: result.decodable ? 'ready' : 'needs-convert',
         };
-        set((s) => ({ clips: [...s.clips, clip] }));
+        set((s) => ({ media: [...s.media, clip] }));
         if (result.decodable) ready++;
         else needsConvert++;
         // Yield between clips so the browser can reclaim decode memory.
@@ -249,7 +247,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   convertClip: async (id) => {
-    const clip = get().clips.find((c) => c.id === id);
+    const clip = get().media.find((m): m is Clip => m.kind === 'clip' && m.id === id);
     if (!clip || clip.status === 'converting') return;
 
     // We re-fetch the original bytes from the object URL we minted at ingest.
@@ -265,13 +263,17 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     set((s) => ({
-      clips: s.clips.map((c) => (c.id === id ? { ...c, status: 'converting', convertProgress: 0 } : c)),
+      media: s.media.map((m) =>
+        m.kind === 'clip' && m.id === id ? { ...m, status: 'converting' as const, convertProgress: 0 } : m,
+      ),
     }));
     toast(`Converting "${clip.name}" on your device… this can take a minute.`, 'info');
 
     try {
       const mp4 = await convertToH264(sourceFile, (ratio) => {
-        set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, convertProgress: ratio } : c)) }));
+        set((s) => ({
+          media: s.media.map((m) => (m.kind === 'clip' && m.id === id ? { ...m, convertProgress: ratio } : m)),
+        }));
       });
       const converted = new File([mp4], clip.name.replace(/\.[^.]+$/, '.mp4'), { type: 'video/mp4' });
 
@@ -282,14 +284,14 @@ export const useStore = create<AppState>((set, get) => ({
       }
       const photoDuration = get().settings.photoDuration;
       // Revoke the old (HEVC) object URL now that we've replaced it.
-      const old = get().clips.find((c) => c.id === id);
+      const old = get().media.find((m): m is Clip => m.kind === 'clip' && m.id === id);
       if (old?.revocable) URL.revokeObjectURL(old.src);
 
       set((s) => ({
-        clips: s.clips.map((c) =>
-          c.id === id
+        media: s.media.map((m) =>
+          m.kind === 'clip' && m.id === id
             ? {
-                ...c,
+                ...m,
                 src: result.src,
                 revocable: result.revocable,
                 posterUrl: result.poster?.url,
@@ -298,17 +300,19 @@ export const useStore = create<AppState>((set, get) => ({
                 width: result.width,
                 height: result.height,
                 outPoint: Math.min(result.naturalDuration, photoDuration),
-                status: 'ready',
+                status: 'ready' as const,
                 convertProgress: undefined,
               }
-            : c,
+            : m,
         ),
       }));
       toast(`"${clip.name}" is ready to play.`, 'success');
     } catch (err) {
       console.error('Convert failed for', clip.name, err);
       set((s) => ({
-        clips: s.clips.map((c) => (c.id === id ? { ...c, status: 'error', convertProgress: undefined } : c)),
+        media: s.media.map((m) =>
+          m.kind === 'clip' && m.id === id ? { ...m, status: 'error' as const, convertProgress: undefined } : m,
+        ),
       }));
       toast(`Couldn't convert "${clip.name}". You can still play it after converting on your computer.`, 'error');
     }
@@ -415,53 +419,48 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  removePhoto: (id) =>
+  // Remove one item (photo OR clip) and free whatever object URLs it owns.
+  removeMedia: (id) =>
     set((s) => {
-      const photo = s.photos.find((p) => p.id === id);
-      if (photo?.revocable) URL.revokeObjectURL(photo.url);
+      const item = s.media.find((m) => m.id === id);
+      if (item) {
+        if (item.kind === 'photo') {
+          if (item.revocable) URL.revokeObjectURL(item.url);
+        } else {
+          if (item.revocable) URL.revokeObjectURL(item.src);
+          if (item.posterRevocable && item.posterUrl) URL.revokeObjectURL(item.posterUrl);
+        }
+      }
       return {
-        photos: s.photos.filter((p) => p.id !== id),
-        // Drop any section card anchored to the photo we just removed.
+        media: s.media.filter((m) => m.id !== id),
+        // Drop any section card anchored to the item we just removed.
         sections: s.sections.filter((c) => c.beforePhotoId !== id),
       };
     }),
 
-  removeClip: (id) =>
-    set((s) => {
-      const clip = s.clips.find((c) => c.id === id);
-      if (clip?.revocable) URL.revokeObjectURL(clip.src);
-      if (clip?.posterRevocable && clip.posterUrl) URL.revokeObjectURL(clip.posterUrl);
-      return { clips: s.clips.filter((c) => c.id !== id) };
-    }),
-
   removeSong: (id) => set((s) => ({ songs: s.songs.filter((x) => x.id !== id) })),
 
-  clearPhotos: () =>
+  clearMedia: () =>
     set((s) => {
-      s.photos.forEach((p) => {
-        if (p.revocable) URL.revokeObjectURL(p.url);
+      s.media.forEach((m) => {
+        if (m.kind === 'photo') {
+          if (m.revocable) URL.revokeObjectURL(m.url);
+        } else {
+          if (m.revocable) URL.revokeObjectURL(m.src);
+          if (m.posterRevocable && m.posterUrl) URL.revokeObjectURL(m.posterUrl);
+        }
       });
-      return { photos: [], sections: [] };
+      return { media: [], sections: [] };
     }),
 
-  togglePhoto: (id) =>
+  toggleMedia: (id) =>
     set((s) => ({
-      photos: s.photos.map((p) => (p.id === id ? { ...p, included: !p.included } : p)),
+      media: s.media.map((m) => (m.id === id ? { ...m, included: !m.included } : m)),
     })),
 
-  toggleClip: (id) =>
+  reorderMedia: (orderedIds) =>
     set((s) => ({
-      clips: s.clips.map((c) => (c.id === id ? { ...c, included: !c.included } : c)),
-    })),
-
-  reorderPhotos: (orderedIds) =>
-    set((s) => ({
-      photos: [...s.photos].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
-    })),
-
-  reorderClips: (orderedIds) =>
-    set((s) => ({
-      clips: [...s.clips].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
+      media: [...s.media].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
     })),
 
   reorderSongs: (orderedIds) =>
@@ -469,19 +468,21 @@ export const useStore = create<AppState>((set, get) => ({
       songs: [...s.songs].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
     })),
 
-  shufflePhotos: () => set((s) => ({ photos: shuffle([...s.photos]) })),
+  shuffleMedia: () => set((s) => ({ media: shuffle([...s.media]) })),
 
-  sortPhotosByDate: () => {
-    const photos = get().photos;
-    const dated = photos.filter((p) => p.capturedAt != null);
-    const undated = photos.filter((p) => p.capturedAt == null);
+  // Sort by capture date. Only photos carry a capturedAt; clips (and undated
+  // photos) keep their relative order and land at the end.
+  sortByDate: () => {
+    const media = get().media;
+    const dated = media.filter((m): m is Photo => m.kind === 'photo' && m.capturedAt != null);
+    const undated = media.filter((m) => !(m.kind === 'photo' && m.capturedAt != null));
     if (!dated.length) {
       toast("Couldn't read capture dates from these photos — order unchanged.", 'error');
       return;
     }
-    // Ascending by capture time; undated photos keep their order at the end.
+    // Ascending by capture time; undated items keep their order at the end.
     dated.sort((a, b) => a.capturedAt! - b.capturedAt!);
-    set({ photos: [...dated, ...undated] });
+    set({ media: [...dated, ...undated] });
     if (undated.length) {
       toast(`Sorted ${dated.length} by date taken — ${undated.length} had no timestamp (moved to the end).`, 'info');
     } else {
@@ -518,3 +519,13 @@ export const useStore = create<AppState>((set, get) => ({
       settings: { ...s.settings, ...data.settings },
     })),
 }));
+
+// ===== Media selectors =====
+// `media` is the single ordered source of truth (photos + clips interleaved).
+// These give the photos-only / clips-only views the rest of the app still needs.
+// In components, wrap with useShallow so the derived array doesn't churn renders:
+//   const photos = useStore(useShallow(selectPhotos));
+export const isPhoto = (m: MediaItem): m is Photo => m.kind === 'photo';
+export const isClip = (m: MediaItem): m is Clip => m.kind === 'clip';
+export const selectPhotos = (s: AppState): Photo[] => s.media.filter(isPhoto);
+export const selectClips = (s: AppState): Clip[] => s.media.filter(isClip);

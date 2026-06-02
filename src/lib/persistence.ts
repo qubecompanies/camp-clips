@@ -1,4 +1,4 @@
-import { useStore } from '../state/store';
+import { useStore, selectPhotos } from '../state/store';
 import { applyPaletteOverride, TEMPLATES } from './templates';
 import { toast } from '../state/toastStore';
 import type { ProjectFile } from '../state/types';
@@ -9,7 +9,9 @@ import type { ProjectFile } from '../state/types';
 // reorder them to match. Ported from the prototype.
 
 export function saveProject(): void {
-  const { eventName, intro, outro, settings, photos, songs } = useStore.getState();
+  const state = useStore.getState();
+  const { eventName, intro, outro, settings, songs } = state;
+  const photos = selectPhotos(state);
   const project: ProjectFile = {
     schemaVersion: 1,
     eventName,
@@ -49,16 +51,20 @@ export async function loadProject(file: File): Promise<void> {
     const tpl = TEMPLATES[tplId] || TEMPLATES.default;
     applyPaletteOverride(tpl.paletteOverride);
 
-    // Reorder existing photos/songs to match saved order + restore included flags
+    // Reorder existing photos/songs to match saved order + restore included flags.
+    // Projects only persist photos; any session-only clips keep their order and
+    // sit after the restored photos in the unified media list.
     if (data.photoOrder) {
       const orderMap = new Map(data.photoOrder.map((p, i) => [p.name, { i, included: p.included }]));
       useStore.setState((s) => {
-        const photos = s.photos.map((p) => {
+        const photos = s.media.filter((m) => m.kind === 'photo');
+        const clips = s.media.filter((m) => m.kind === 'clip');
+        const restored = photos.map((p) => {
           const info = orderMap.get(p.name);
           return info ? { ...p, included: info.included } : p;
         });
-        photos.sort((a, b) => (orderMap.get(a.name)?.i ?? 9999) - (orderMap.get(b.name)?.i ?? 9999));
-        return { photos };
+        restored.sort((a, b) => (orderMap.get(a.name)?.i ?? 9999) - (orderMap.get(b.name)?.i ?? 9999));
+        return { media: [...restored, ...clips] };
       });
     }
     if (data.songOrder) {

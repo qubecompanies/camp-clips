@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore } from '../state/store';
+import { useShallow } from 'zustand/react/shallow';
+import { useStore, selectPhotos } from '../state/store';
 import { Slider } from './controls';
 import { SettingsPanel } from './SettingsPanel';
 import { SongList } from './SongList';
@@ -163,7 +164,7 @@ function SetupPanel() {
 }
 
 function SectionCardsPanel() {
-  const photos = useStore((s) => s.photos);
+  const photos = useStore(useShallow(selectPhotos));
   const sections = useStore((s) => s.sections);
   const updateSection = useStore((s) => s.updateSection);
   const removeSection = useStore((s) => s.removeSection);

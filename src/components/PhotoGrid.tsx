@@ -26,28 +26,24 @@ const GoogleDriveIcon = ({ size = 16 }: { size?: number }) => (
 );
 
 export function PhotoGrid({ onShowGooglePhotos }: Props) {
-  const photos = useStore((s) => s.photos);
-  const clips = useStore((s) => s.clips);
+  // ONE ordered list now: photos and clips interleaved. The grid renders this in
+  // order and a single Sortable reorders across both.
+  const media = useStore((s) => s.media);
   const sections = useStore((s) => s.sections);
   const addPhotos = useStore((s) => s.addPhotos);
   const addVideos = useStore((s) => s.addVideos);
   const convertClip = useStore((s) => s.convertClip);
   const addSongs = useStore((s) => s.addSongs);
   const addSection = useStore((s) => s.addSection);
-  const removePhoto = useStore((s) => s.removePhoto);
-  const removeClip = useStore((s) => s.removeClip);
-  const toggleClip = useStore((s) => s.toggleClip);
-  const togglePhoto = useStore((s) => s.togglePhoto);
-  const clearPhotos = useStore((s) => s.clearPhotos);
-  const shufflePhotos = useStore((s) => s.shufflePhotos);
-  const sortPhotosByDate = useStore((s) => s.sortPhotosByDate);
-  const reorderPhotos = useStore((s) => s.reorderPhotos);
-  const reorderClips = useStore((s) => s.reorderClips);
+  const removeMedia = useStore((s) => s.removeMedia);
+  const toggleMedia = useStore((s) => s.toggleMedia);
+  const clearMedia = useStore((s) => s.clearMedia);
+  const shuffleMedia = useStore((s) => s.shuffleMedia);
+  const sortByDate = useStore((s) => s.sortByDate);
+  const reorderMedia = useStore((s) => s.reorderMedia);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const sortableRef = useRef<Sortable | null>(null);
-  const clipGridRef = useRef<HTMLDivElement>(null);
-  const clipSortableRef = useRef<Sortable | null>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const clipsInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +54,10 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
       animation: 180,
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
+      // Action buttons must not start a drag (Sortable would otherwise swallow
+      // their click). preventOnFilter:false lets the native click through.
+      filter: '.convert-btn, .remove-btn, .section-btn, .photo-action-btn',
+      preventOnFilter: false,
       onEnd: (evt) => {
         const { oldIndex, newIndex, from, item } = evt;
         if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
@@ -65,72 +65,42 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
         // then re-derive the order by index math and push it to the store.
         from.removeChild(item);
         from.insertBefore(item, from.children[oldIndex] ?? null);
-        const ids = useStore.getState().photos.map((p) => p.id);
+        const ids = useStore.getState().media.map((m) => m.id);
         const [moved] = ids.splice(oldIndex, 1);
         ids.splice(newIndex, 0, moved);
-        reorderPhotos(ids);
+        reorderMedia(ids);
       },
     });
     return () => {
       sortableRef.current?.destroy();
       sortableRef.current = null;
     };
-  }, [reorderPhotos]);
+  }, [reorderMedia]);
 
-  // Clips get their own Sortable strip (Phase 2 will merge clips + photos into
-  // one timeline; for now they reorder among themselves).
-  useEffect(() => {
-    if (!clipGridRef.current) return;
-    clipSortableRef.current = Sortable.create(clipGridRef.current, {
-      animation: 180,
-      ghostClass: 'sortable-ghost',
-      chosenClass: 'sortable-chosen',
-      // Don't let a drag start on the action buttons — otherwise Sortable can
-      // swallow the click. preventOnFilter:false lets the button's native click
-      // through instead of calling preventDefault on it.
-      filter: '.convert-btn, .remove-btn',
-      preventOnFilter: false,
-      onEnd: (evt) => {
-        const { oldIndex, newIndex, from, item } = evt;
-        if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
-        from.removeChild(item);
-        from.insertBefore(item, from.children[oldIndex] ?? null);
-        const ids = useStore.getState().clips.map((c) => c.id);
-        const [moved] = ids.splice(oldIndex, 1);
-        ids.splice(newIndex, 0, moved);
-        reorderClips(ids);
-      },
-    });
-    return () => {
-      clipSortableRef.current?.destroy();
-      clipSortableRef.current = null;
-    };
-  }, [reorderClips, clips.length]);
-
-  const included = photos.filter((p) => p.included).length;
+  const included = media.filter((m) => m.included).length;
   const sectionByPhoto = new Map(sections.map((s) => [s.beforePhotoId, s]));
 
   const handleClear = () => {
-    if (!photos.length) return;
-    if (!confirm(`Clear all ${photos.length} photos?`)) return;
-    clearPhotos();
+    if (!media.length) return;
+    if (!confirm(`Clear all ${media.length} item${media.length === 1 ? '' : 's'}?`)) return;
+    clearMedia();
   };
 
   const handleShuffle = () => {
-    if (photos.length < 2) {
-      toast('Add more photos to shuffle.', 'info');
+    if (media.length < 2) {
+      toast('Add more to shuffle.', 'info');
       return;
     }
-    shufflePhotos();
-    toast('Photos shuffled.', 'success');
+    shuffleMedia();
+    toast('Shuffled.', 'success');
   };
 
   const handleSortByDate = () => {
-    if (photos.length < 2) {
-      toast('Add more photos to sort.', 'info');
+    if (media.length < 2) {
+      toast('Add more to sort.', 'info');
       return;
     }
-    sortPhotosByDate();
+    sortByDate();
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -147,10 +117,14 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
     }
   };
 
+  // Running photo number so photos read 1..N in order, regardless of clips
+  // interleaved between them.
+  let photoNum = 0;
+
   return (
     <main className="main-content">
       <div className="photos-toolbar">
-        <div className="toolbar-title">Photos</div>
+        <div className="toolbar-title">Photos &amp; Clips</div>
         <button
           className="btn btn-ghost btn-icon"
           title="How to import from Google Drive"
@@ -160,11 +134,11 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
           <GoogleDriveIcon />
         </button>
         <div className="toolbar-info">
-          {photos.length
-            ? `${included} of ${photos.length} included · drag to reorder · click to toggle`
+          {media.length
+            ? `${included} of ${media.length} included · drag to reorder · click to toggle`
             : 'No photos yet'}
         </div>
-        <button className="btn" title="Order photos by the date they were taken" onClick={handleSortByDate}>
+        <button className="btn" title="Order by the date each item was taken" onClick={handleSortByDate}>
           <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
             <line x1="16" y1="2" x2="16" y2="6" />
@@ -173,7 +147,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
           </svg>
           By Date
         </button>
-        <button className="btn" title="Randomize photo order now" onClick={handleShuffle}>
+        <button className="btn" title="Randomize order now" onClick={handleShuffle}>
           <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="16 3 21 3 21 8" />
             <line x1="4" y1="20" x2="21" y2="3" />
@@ -236,7 +210,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
       </div>
 
       <div className="photos-area" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
-        {!photos.length && (
+        {!media.length && (
           <div className="empty-state" style={{ display: 'flex' }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -244,7 +218,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
               <polyline points="21 15 16 10 5 21" />
             </svg>
             <h2>Add your camp photos</h2>
-            <p>Drag photos in, or pick them below. They stay in your browser — nothing uploads anywhere.</p>
+            <p>Drag photos or clips in, or pick them below. They stay in your browser — nothing uploads anywhere.</p>
             <div className="empty-actions">
               <button className="btn btn-primary btn-large import-btn" onClick={() => photosInputRef.current?.click()}>
                 <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -267,143 +241,137 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
             </div>
           </div>
         )}
-        {clips.length > 0 && (
-          <div className="clips-section">
-            <div className="clips-section-head">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="23 7 16 12 23 17 23 7" />
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-              </svg>
-              Video Clips
-              <span className="clips-section-hint">drag to reorder · click to toggle</span>
-            </div>
-            <div ref={clipGridRef} className="clip-grid">
-              {clips.map((clip) => {
-                const needsConvert = clip.status === 'needs-convert';
-                const converting = clip.status === 'converting';
-                const errored = clip.status === 'error';
-                const pct = Math.round((clip.convertProgress ?? 0) * 100);
-                return (
-                  <div
-                    key={clip.id}
-                    className={
-                      'clip-card' +
-                      (clip.included ? '' : ' excluded') +
-                      (needsConvert || errored ? ' needs-convert' : '') +
-                      (converting ? ' converting' : '')
+
+        <div ref={gridRef} className="photo-grid">
+          {media.map((item) => {
+            if (item.kind === 'clip') {
+              const clip = item;
+              const needsConvert = clip.status === 'needs-convert';
+              const converting = clip.status === 'converting';
+              const errored = clip.status === 'error';
+              const pct = Math.round((clip.convertProgress ?? 0) * 100);
+              return (
+                <div
+                  key={clip.id}
+                  className={
+                    'clip-card' +
+                    (clip.included ? '' : ' excluded') +
+                    (needsConvert || errored ? ' needs-convert' : '') +
+                    (converting ? ' converting' : '')
+                  }
+                  data-id={clip.id}
+                  onClick={(e) => {
+                    const t = e.target as HTMLElement;
+                    if (t.closest('.remove-btn')) {
+                      removeMedia(clip.id);
+                      return;
                     }
-                    data-id={clip.id}
-                    onClick={(e) => {
-                      const t = e.target as HTMLElement;
-                      if (t.closest('.remove-btn')) {
-                        removeClip(clip.id);
-                        return;
-                      }
-                      if (t.closest('.convert-btn')) {
-                        convertClip(clip.id);
-                        return;
-                      }
-                      if (needsConvert || converting || errored) return; // not toggleable until playable
-                      toggleClip(clip.id);
-                    }}
-                  >
-                    {clip.posterUrl ? (
-                      <img src={clip.posterUrl} alt="" loading="lazy" />
-                    ) : (
-                      <div className="clip-placeholder">
-                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <polygon points="23 7 16 12 23 17 23 7" />
-                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                    if (t.closest('.convert-btn')) {
+                      convertClip(clip.id);
+                      return;
+                    }
+                    if (needsConvert || converting || errored) return; // not toggleable until playable
+                    toggleMedia(clip.id);
+                  }}
+                >
+                  {clip.posterUrl ? (
+                    <img src={clip.posterUrl} alt="" loading="lazy" />
+                  ) : (
+                    <div className="clip-placeholder">
+                      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <polygon points="23 7 16 12 23 17 23 7" />
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                      </svg>
+                      <div className="clip-placeholder-name">{clip.name}</div>
+                    </div>
+                  )}
+
+                  {/* Clip glyph — film strip reads without color (deuteranopia-safe),
+                      distinguishing a clip tile from a photo tile at a glance. */}
+                  {clip.status === 'ready' && (
+                    <span className="clip-play-badge" aria-hidden="true">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="6 4 20 12 6 20 6 4" />
+                      </svg>
+                    </span>
+                  )}
+
+                  {clip.status === 'ready' && clip.naturalDuration > 0 && (
+                    <span className="clip-duration-pill">{fmtTime(clip.naturalDuration)}</span>
+                  )}
+
+                  {/* HEVC / undecodable: guidance + opt-in on-device convert */}
+                  {needsConvert && (
+                    <div className="clip-convert-overlay">
+                      <div className="clip-convert-msg">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                          <line x1="12" y1="9" x2="12" y2="13" />
+                          <line x1="12" y1="17" x2="12.01" y2="17" />
                         </svg>
-                        <div className="clip-placeholder-name">{clip.name}</div>
+                        <span>This clip’s format (likely iPhone HEVC) can’t play here yet.</span>
                       </div>
-                    )}
-
-                    {/* Play badge — triangle glyph reads without color (deuteranopia-safe) */}
-                    {clip.status === 'ready' && (
-                      <span className="clip-play-badge" aria-hidden="true">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                          <polygon points="6 4 20 12 6 20 6 4" />
-                        </svg>
-                      </span>
-                    )}
-
-                    {clip.status === 'ready' && clip.naturalDuration > 0 && (
-                      <span className="clip-duration-pill">{fmtTime(clip.naturalDuration)}</span>
-                    )}
-
-                    {/* HEVC / undecodable: guidance + opt-in on-device convert */}
-                    {needsConvert && (
-                      <div className="clip-convert-overlay">
-                        <div className="clip-convert-msg">
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                          </svg>
-                          <span>This clip’s format (likely iPhone HEVC) can’t play here yet.</span>
-                        </div>
-                        <button
-                          className="btn btn-primary btn-sm convert-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            convertClip(clip.id);
-                          }}
-                        >
-                          Convert on device
-                        </button>
-                      </div>
-                    )}
-
-                    {converting && (
-                      <div className="clip-convert-overlay">
-                        <div className="clip-convert-progress">
-                          <div className="clip-convert-bar" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="clip-convert-pct">Converting… {pct}%</span>
-                      </div>
-                    )}
-
-                    {errored && (
-                      <div className="clip-convert-overlay">
-                        <div className="clip-convert-msg">
-                          <span>Conversion failed. Try converting it on your computer, then re-add.</span>
-                        </div>
-                        <button
-                          className="btn btn-sm convert-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            convertClip(clip.id);
-                          }}
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="photo-actions">
                       <button
-                        className="photo-action-btn remove-btn"
-                        title="Remove"
+                        className="btn btn-primary btn-sm convert-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          removeClip(clip.id);
+                          convertClip(clip.id);
                         }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
+                        Convert on device
                       </button>
                     </div>
+                  )}
+
+                  {converting && (
+                    <div className="clip-convert-overlay">
+                      <div className="clip-convert-progress">
+                        <div className="clip-convert-bar" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="clip-convert-pct">Converting… {pct}%</span>
+                    </div>
+                  )}
+
+                  {errored && (
+                    <div className="clip-convert-overlay">
+                      <div className="clip-convert-msg">
+                        <span>Conversion failed. Try converting it on your computer, then re-add.</span>
+                      </div>
+                      <button
+                        className="btn btn-sm convert-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          convertClip(clip.id);
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="photo-actions">
+                    <button
+                      className="photo-action-btn remove-btn"
+                      title="Remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeMedia(clip.id);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <div ref={gridRef} className="photo-grid">
-          {photos.map((photo, index) => {
+                </div>
+              );
+            }
+
+            // Photo card
+            const photo = item;
+            photoNum++;
+            const index = photoNum;
             const section = sectionByPhoto.get(photo.id);
             return (
               <div
@@ -413,7 +381,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                 onClick={(e) => {
                   const t = e.target as HTMLElement;
                   if (t.closest('.remove-btn')) {
-                    removePhoto(photo.id);
+                    removeMedia(photo.id);
                     return;
                   }
                   if (t.closest('.section-btn')) {
@@ -425,7 +393,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                     }
                     return;
                   }
-                  togglePhoto(photo.id);
+                  toggleMedia(photo.id);
                 }}
               >
                 <img src={photo.url} alt="" loading="lazy" />
@@ -438,7 +406,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                   <div className="photo-error-name">{photo.name}</div>
                   <div className="photo-error-hint">Can't display this file</div>
                 </div>
-                <span className="photo-index">{index + 1}</span>
+                <span className="photo-index">{index}</span>
                 {section && (
                   <span className="photo-section-badge" title={`Section card: ${section.title || 'Untitled'}`}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

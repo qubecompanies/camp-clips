@@ -14,8 +14,8 @@ const KB_INTENSITIES: { label: string; value: number }[] = [
 export function SettingsPanel() {
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
-  // Subscribe to photos/songs so the plan readout updates live
-  useStore((s) => s.photos);
+  // Subscribe to media/songs so the plan readout updates live
+  useStore((s) => s.media);
   useStore((s) => s.songs);
   useStore((s) => s.intro);
   useStore((s) => s.outro);

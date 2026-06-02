@@ -1,4 +1,4 @@
-import { useStore } from '../state/store';
+import { useStore, selectPhotos } from '../state/store';
 import { shuffle } from './utils';
 import type { Photo, ShowLength, SectionCard } from '../state/types';
 
@@ -7,7 +7,7 @@ import type { Photo, ShowLength, SectionCard } from '../state/types';
 const SECTION_FADE = 0.8;
 
 export function getIncludedPhotos(): Photo[] {
-  return useStore.getState().photos.filter((p) => p.included);
+  return selectPhotos(useStore.getState()).filter((p) => p.included);
 }
 export function getIncludedSongs() {
   return useStore.getState().songs.filter((s) => s.included);

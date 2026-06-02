@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '../state/store';
+import { useStore, selectPhotos } from '../state/store';
 import { AppHeader } from '../components/AppHeader';
 import { Sidebar } from '../components/Sidebar';
 import { PhotoGrid } from '../components/PhotoGrid';
@@ -36,7 +36,7 @@ export default function Editor() {
   };
 
   const handleExport = () => {
-    if (!useStore.getState().photos.some((p) => p.included)) return;
+    if (!selectPhotos(useStore.getState()).some((p) => p.included)) return;
     setShowExport(true);
   };
 
