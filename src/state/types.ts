@@ -124,7 +124,8 @@ export interface Settings {
   shuffleOnPlay: boolean;
   showLength: ShowLength;
   timeLimitMin: number;
-  fillBehavior: FillBehavior;
+  fillBehavior: FillBehavior; // MUSIC vs show-length behaviour (loop/stretch/fit)
+  photoFit: 'cover' | 'contain'; // how each PHOTO sits in the frame: cover=fill+crop, contain=fit+letterbox
   theme: Theme;
   exportRes: ExportRes;
   exportFmt: ExportFmt;

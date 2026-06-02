@@ -36,10 +36,12 @@ export function ensureKbPlan(photo: Photo, _naturalW: number, _naturalH: number)
   if (photo.kbPlan) return photo.kbPlan;
   const settings = useStore.getState().settings;
 
-  // Show the WHOLE photo (letterboxed) instead of cropping to fill the frame —
-  // quality over a zoomed-in fill. Phone photos are often tall or wide and
-  // shouldn't lose their edges (or heads) just to fill a 16:9 stage.
-  const fillMode: 'cover' | 'contain' = 'contain';
+  // Fit (contain): show the WHOLE photo letterboxed — quality over fill, no lost
+  // edges/heads. Fill (cover): crop to fill the frame. User-controlled via the
+  // Fit/Fill toggle (settings.photoFit). Consumers also read the live setting so
+  // toggling re-frames instantly without regenerating plans (motion is zoom-only,
+  // so it's always safe in either mode).
+  const fillMode: 'cover' | 'contain' = settings.photoFit;
 
   // FACE-AWARE PLAN: anchor the gentle zoom on the detected faces.
   if (photo.face) {
@@ -75,20 +77,23 @@ export function applyLiveKenBurns(imgEl: KbImg, photo: Photo, motionMs: number):
     imgEl._kbAnim = null;
   }
 
+  // Read the fit mode live so the Fit/Fill toggle re-frames instantly.
+  const fit = settings.photoFit;
+
   if (!settings.kenBurns) {
-    imgEl.classList.add('kb-contain');
+    imgEl.classList.add(fit === 'cover' ? 'kb-cover' : 'kb-contain');
     imgEl.style.transform = 'none';
     return;
   }
 
   const plan = ensureKbPlan(photo, imgEl.naturalWidth, imgEl.naturalHeight);
-  imgEl.classList.add(plan.fillMode === 'cover' ? 'kb-cover' : 'kb-contain');
+  imgEl.classList.add(fit === 'cover' ? 'kb-cover' : 'kb-contain');
   imgEl.style.transformOrigin = `${plan.focal.x * 100}% ${plan.focal.y * 100}%`;
   // In cover mode the image is cropped to fill the frame; object-position shifts
   // that crop so the focal point (faces, when detected) is what's kept, instead
   // of the default center crop that can lop heads off.
   imgEl.style.objectPosition =
-    plan.fillMode === 'cover' ? `${plan.focal.x * 100}% ${plan.focal.y * 100}%` : '50% 50%';
+    fit === 'cover' ? `${plan.focal.x * 100}% ${plan.focal.y * 100}%` : '50% 50%';
 
   const Z = plan.zoom ?? settings.kenBurnsIntensity;
   const zoomed = 1 + Z;
@@ -261,14 +266,15 @@ export function drawKB(
   const settings = useStore.getState().settings;
   ctx.save();
   if (alpha !== undefined) ctx.globalAlpha = alpha;
+  const fit = settings.photoFit;
   if (!settings.kenBurns || !plan) {
-    // static contain fit
-    const base = _computeBaseFit(W, H, img.width, img.height, 'contain');
+    // static fit — respect the Fit/Fill toggle (focal-biased crop in cover mode)
+    const base = _computeBaseFit(W, H, img.width, img.height, fit, plan?.focal);
     ctx.drawImage(img, base.x, base.y, base.w, base.h);
     ctx.restore();
     return;
   }
-  const base = _computeBaseFit(W, H, img.width, img.height, plan.fillMode, plan.focal);
+  const base = _computeBaseFit(W, H, img.width, img.height, fit, plan.focal);
   const Z = plan.zoom ?? settings.kenBurnsIntensity;
   const r = _applyKbToRect(base, plan, t, W, H, Z);
   ctx.drawImage(img, r.x, r.y, r.w, r.h);

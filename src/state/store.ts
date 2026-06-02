@@ -69,6 +69,7 @@ export const useStore = create<AppState>((set, get) => ({
     showLength: 'all',
     timeLimitMin: 5,
     fillBehavior: 'loop',
+    photoFit: 'contain', // default: show the whole photo (letterbox), quality over fill
     theme: 'light',
     exportRes: 1080,
     exportFmt: 'webm',
