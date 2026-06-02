@@ -662,6 +662,33 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
 }
 
+/* One-tap "Use as photo" chip on short clips. Anchored bottom-left so it never
+   collides with the duration pill (bottom-right). Icon + label so it reads
+   without relying on color. */
+.clip-use-photo {
+  position: absolute;
+  bottom: 6px; left: 6px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(3px);
+  transition: background 0.15s, border-color 0.15s;
+}
+.clip-use-photo:hover {
+  background: rgba(0,0,0,0.88);
+  border-color: var(--primary, #F59E0B);
+}
+
 /* Convert / error overlay */
 .clip-convert-overlay {
   position: absolute;

@@ -85,14 +85,17 @@ function probeVideoEl(src: string): Promise<VideoProbe> {
   });
 }
 
-// Grab a single downscaled poster frame from a decodable clip. Returns null on
-// any failure (the tile just shows a generic placeholder — non-fatal).
-async function capturePoster(
+// Grab one frame at `atTime` (seconds) from a decodable clip, downscaled to the
+// same memory ceiling photos use, encoded as a JPEG blob. Returns the blob plus
+// the downscaled pixel dimensions, or null on any failure. Shared by both the
+// poster thumbnail and the "use as photo" middle-frame promotion — streams off a
+// single <video> element so the browser never holds more than one frame in RAM.
+async function grabFrame(
   src: string,
   width: number,
   height: number,
-  duration: number,
-): Promise<{ url: string; revocable: boolean } | null> {
+  atTime: number,
+): Promise<{ blob: Blob; w: number; h: number } | null> {
   const video = document.createElement('video');
   video.preload = 'auto';
   video.muted = true;
@@ -101,25 +104,24 @@ async function capturePoster(
   try {
     await new Promise<void>((resolve, reject) => {
       video.addEventListener('loadeddata', () => resolve(), { once: true });
-      video.addEventListener('error', () => reject(new Error('poster load failed')), { once: true });
-      setTimeout(() => reject(new Error('poster load timeout')), 8000);
+      video.addEventListener('error', () => reject(new Error('frame load failed')), { once: true });
+      setTimeout(() => reject(new Error('frame load timeout')), 8000);
       video.src = src;
     });
 
-    // Seek to a representative frame and wait for it to paint.
-    const seekTo = Math.min(POSTER_SEEK_MAX, (duration || 0) * POSTER_SEEK_FRACTION);
+    // Seek to the requested frame and wait for it to paint.
     await new Promise<void>((resolve, reject) => {
       video.addEventListener('seeked', () => resolve(), { once: true });
-      video.addEventListener('error', () => reject(new Error('poster seek failed')), { once: true });
+      video.addEventListener('error', () => reject(new Error('frame seek failed')), { once: true });
       setTimeout(() => resolve(), 4000); // draw whatever we have rather than hang
       try {
-        video.currentTime = seekTo;
+        video.currentTime = Math.max(0, atTime);
       } catch {
         resolve();
       }
     });
 
-    // Downscale to the same ceiling photos use, so a clip thumbnail never costs
+    // Downscale to the same ceiling photos use, so a clip frame never costs
     // more memory than a photo.
     const scale = Math.min(MAX_IMAGE_DIM / width, MAX_IMAGE_DIM / height, 1);
     const w = Math.max(1, Math.round(width * scale));
@@ -137,13 +139,43 @@ async function capturePoster(
     canvas.width = 0;
     canvas.height = 0;
     if (!blob) return null;
-    return await blobToUsableUrl(blob);
+    return { blob, w, h };
   } catch {
     return null;
   } finally {
     video.removeAttribute('src');
     video.load();
   }
+}
+
+// A single downscaled poster frame from a decodable clip (a tiny offset in, to
+// dodge the black/garbage first frame some encoders emit). Returns null on
+// failure — the tile just shows a generic placeholder, non-fatal.
+async function capturePoster(
+  src: string,
+  width: number,
+  height: number,
+  duration: number,
+): Promise<{ url: string; revocable: boolean } | null> {
+  const seekTo = Math.min(POSTER_SEEK_MAX, (duration || 0) * POSTER_SEEK_FRACTION);
+  const frame = await grabFrame(src, width, height, seekTo);
+  if (!frame) return null;
+  return await blobToUsableUrl(frame.blob);
+}
+
+// Promote a clip to a still: grab the frame at `atTime` (the caller passes the
+// midpoint) and return a photo-ready object URL plus its downscaled dimensions.
+// Used by "Use as photo" on short clips / Live Photos. Returns null on failure.
+export async function extractStillFrame(
+  src: string,
+  width: number,
+  height: number,
+  atTime: number,
+): Promise<{ url: string; revocable: boolean; width: number; height: number } | null> {
+  const frame = await grabFrame(src, width, height, atTime);
+  if (!frame) return null;
+  const usable = await blobToUsableUrl(frame.blob);
+  return { url: usable.url, revocable: usable.revocable, width: frame.w, height: frame.h };
 }
 
 // Full ingest of one video file: mint a playable URL, probe decode support, and

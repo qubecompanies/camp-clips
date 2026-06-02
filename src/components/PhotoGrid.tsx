@@ -2,7 +2,12 @@ import { useEffect, useRef } from 'react';
 import Sortable from 'sortablejs';
 import { useStore } from '../state/store';
 import { isImageFile, isAudioFile, isVideoFile, fmtTime } from '../lib/utils';
+import { partitionLivePhotos } from '../lib/livePhotos';
 import { toast } from '../state/toastStore';
+
+// Clips at or under this length get the one-tap "Use as photo" suggestion —
+// most are accidental Live Photos / 2-second taps that read better as a still.
+const SHORT_CLIP_SEC = 3;
 
 interface Props {
   onShowGooglePhotos: () => void;
@@ -33,6 +38,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
   const addPhotos = useStore((s) => s.addPhotos);
   const addVideos = useStore((s) => s.addVideos);
   const convertClip = useStore((s) => s.convertClip);
+  const useClipAsPhoto = useStore((s) => s.useClipAsPhoto);
   const addSongs = useStore((s) => s.addSongs);
   const addSection = useStore((s) => s.addSection);
   const removeMedia = useStore((s) => s.removeMedia);
@@ -56,7 +62,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
       chosenClass: 'sortable-chosen',
       // Action buttons must not start a drag (Sortable would otherwise swallow
       // their click). preventOnFilter:false lets the native click through.
-      filter: '.convert-btn, .remove-btn, .section-btn, .photo-action-btn',
+      filter: '.convert-btn, .remove-btn, .section-btn, .photo-action-btn, .use-photo-btn',
       preventOnFilter: false,
       onEnd: (evt) => {
         const { oldIndex, newIndex, from, item } = evt;
@@ -109,9 +115,17 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
     const images = files.filter(isImageFile);
     const audio = files.filter(isAudioFile);
     const video = files.filter(isVideoFile);
+    // Live Photo pairing: drop the motion clip when its still is in the same drop.
+    const { keptVideos, pairedCount } = partitionLivePhotos(images, video);
     if (images.length) addPhotos(images);
     if (audio.length) addSongs(audio);
-    if (video.length) addVideos(video);
+    if (keptVideos.length) addVideos(keptVideos);
+    if (pairedCount) {
+      toast(
+        `${pairedCount} Live Photo${pairedCount === 1 ? '' : 's'} added as still${pairedCount === 1 ? '' : 's'} (motion clip skipped).`,
+        'info',
+      );
+    }
     if (!images.length && !audio.length && !video.length) {
       toast('Drop photos, video clips, or audio files to add them.', 'error');
     }
@@ -270,6 +284,10 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                       convertClip(clip.id);
                       return;
                     }
+                    if (t.closest('.use-photo-btn')) {
+                      useClipAsPhoto(clip.id);
+                      return;
+                    }
                     if (needsConvert || converting || errored) return; // not toggleable until playable
                     toggleMedia(clip.id);
                   }}
@@ -299,6 +317,28 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                   {clip.status === 'ready' && clip.naturalDuration > 0 && (
                     <span className="clip-duration-pill">{fmtTime(clip.naturalDuration)}</span>
                   )}
+
+                  {/* Short clips (likely a Live Photo / quick tap) read better as
+                      a still — offer a one-tap promotion using the middle frame. */}
+                  {clip.status === 'ready' &&
+                    clip.naturalDuration > 0 &&
+                    clip.naturalDuration <= SHORT_CLIP_SEC && (
+                      <button
+                        className="use-photo-btn clip-use-photo"
+                        title="This clip is short — use a single frame as a photo instead"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          useClipAsPhoto(clip.id);
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        Use as photo
+                      </button>
+                    )}
 
                   {/* HEVC / undecodable: guidance + opt-in on-device convert */}
                   {needsConvert && (

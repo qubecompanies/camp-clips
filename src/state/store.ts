@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { Photo, Clip, MediaItem, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
 import { processImageFile } from '../lib/imageProcessing';
-import { ingestVideo, convertToH264 } from '../lib/videoIngest';
+import { ingestVideo, convertToH264, extractStillFrame } from '../lib/videoIngest';
+import { partitionLivePhotos } from '../lib/livePhotos';
 import { readCaptureTime } from '../lib/exif';
 import { ensureAudioCtx, getGainNode } from '../lib/audioContext';
 import { trackUrl } from '../lib/musicLibrary';
@@ -55,6 +56,7 @@ export interface AppState {
   addPhotos: (fileList: FileList | File[]) => Promise<void>;
   addVideos: (fileList: FileList | File[]) => Promise<void>;
   convertClip: (id: string) => Promise<void>;
+  useClipAsPhoto: (id: string) => Promise<void>;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
   addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
   removeMedia: (id: string) => void;
@@ -108,18 +110,24 @@ export const useStore = create<AppState>((set, get) => ({
   setPlayback: (patch) => set((s) => ({ playback: { ...s.playback, ...patch } })),
 
   addPhotos: async (fileList) => {
-    const files = Array.from(fileList).filter(isImageFile);
+    const all = Array.from(fileList);
+    const files = all.filter(isImageFile);
+    const allVideos = all.filter(isVideoFile);
     if (!files.length) {
       // Videos can arrive mixed in via the folder picker; route them through the
       // clip pipeline instead of rejecting.
-      const videos = Array.from(fileList).filter(isVideoFile);
-      if (videos.length) {
-        await get().addVideos(videos);
+      if (allVideos.length) {
+        await get().addVideos(allVideos);
       } else {
         toast("Those don't look like image files. Try JPG, PNG, or HEIC.", 'error');
       }
       return;
     }
+
+    // Live Photo pairing: when a still and its same-basename motion clip arrive
+    // together (the iPhone IMG_1234.HEIC + IMG_1234.MOV pair), keep the still and
+    // drop the clip. Unpaired videos still get added as real clips afterward.
+    const { keptVideos, pairedCount } = partitionLivePhotos(files, allVideos);
 
     // Soft warning for very large imports — memory pressure can crash older devices
     if (files.length > 100) {
@@ -181,6 +189,17 @@ export const useStore = create<AppState>((set, get) => ({
       toast(`Added ${added} photos; ${failed} couldn't load.`, 'info');
     } else if (failed > 0) {
       toast(`${failed} photo${failed === 1 ? " couldn't" : "s couldn't"} load. The rest are ready.`, 'error');
+    }
+
+    if (pairedCount > 0) {
+      toast(
+        `${pairedCount} Live Photo${pairedCount === 1 ? '' : 's'} added as still${pairedCount === 1 ? '' : 's'} (motion clip skipped).`,
+        'info',
+      );
+    }
+    // Any videos that weren't half of a Live Photo become real clips.
+    if (keptVideos.length) {
+      await get().addVideos(keptVideos);
     }
   },
 
@@ -316,6 +335,43 @@ export const useStore = create<AppState>((set, get) => ({
       }));
       toast(`Couldn't convert "${clip.name}". You can still play it after converting on your computer.`, 'error');
     }
+  },
+
+  // Promote a (short) clip to a still photo using its middle frame. The clip's
+  // slot is replaced in place so order is preserved, and its object URLs are
+  // freed. Used by the "Use as photo" chip on short clips / Live Photos.
+  useClipAsPhoto: async (id) => {
+    const clip = get().media.find((m): m is Clip => m.kind === 'clip' && m.id === id);
+    if (!clip) return;
+    if (clip.status !== 'ready' || !clip.width || !clip.height) {
+      toast('This clip needs to play here before it can become a photo.', 'info');
+      return;
+    }
+
+    // Middle frame — the locked "still = middle frame" decision.
+    const mid = clip.naturalDuration > 0 ? clip.naturalDuration / 2 : 0;
+    const frame = await extractStillFrame(clip.src, clip.width, clip.height, mid);
+    if (!frame) {
+      toast(`Couldn't grab a frame from "${clip.name}".`, 'error');
+      return;
+    }
+
+    const photo: Photo = {
+      id: uid(),
+      kind: 'photo',
+      name: clip.name.replace(/\.[^.]+$/, '.jpg'),
+      url: frame.url,
+      revocable: frame.revocable,
+      width: frame.width,
+      height: frame.height,
+      included: clip.included,
+    };
+    // Swap the clip out for the photo at the same position.
+    set((s) => ({ media: s.media.map((m) => (m.id === id ? photo : m)) }));
+    // Free the clip's now-unused object URLs.
+    if (clip.revocable) URL.revokeObjectURL(clip.src);
+    if (clip.posterRevocable && clip.posterUrl) URL.revokeObjectURL(clip.posterUrl);
+    toast(`Using a still from "${clip.name}".`, 'success');
   },
 
   addSongs: async (fileList) => {
