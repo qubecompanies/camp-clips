@@ -286,11 +286,22 @@ function drawVideoFrame(
   ctx.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
 }
 
+// Audio plumbing handed to renderClip so a clip's own sound can be mixed into
+// the export (Phase 5). When present and the clip isn't muted, we route the
+// clip element through the export graph and duck the music while it plays —
+// mirroring the live preview's ducking behaviour.
+interface ClipAudioBus {
+  ctx: AudioContext;
+  dest: MediaStreamAudioDestinationNode;
+  musicGain: GainNode; // the export's music gain, ducked during unmuted clips
+  musicVolume: number; // base music level to duck from / restore to
+}
+
 // Render a clip's trimmed range to the canvas in real time, captured by the
-// MediaRecorder via the canvas stream. Clip AUDIO is intentionally muted in the
-// export — full clip-audio mixing is the Phase 5 item; the music bed carries
-// the soundtrack. We fade in from / out to black so clips read as clean cuts
-// regardless of what precedes or follows them.
+// MediaRecorder via the canvas stream. Clip audio is mixed in when `audio` is
+// provided and the clip isn't muted (Phase 5); otherwise the music bed carries
+// the soundtrack alone. We fade in from / out to black so clips read as clean
+// cuts regardless of what precedes or follows them.
 async function renderClip(
   ctx: CanvasRenderingContext2D,
   W: number,
@@ -299,14 +310,48 @@ async function renderClip(
   transSec: number,
   fit: 'cover' | 'contain',
   onTick: () => void,
+  audio?: ClipAudioBus,
 ): Promise<void> {
   const fps = 30;
   const fadeFrames = Math.max(1, Math.round(transSec * fps));
+  const wantsAudio = !!audio && !clip.muted;
   const video = document.createElement('video');
-  video.muted = true; // Phase 4: visuals only; clip audio mixing is Phase 5
+  // Element audio flows into the graph only when unmuted; createMediaElementSource
+  // below still respects the element's muted/volume, so muted clips stay silent.
+  video.muted = !wantsAudio;
   video.playsInline = true;
   video.preload = 'auto';
+  video.crossOrigin = 'anonymous'; // object URLs are same-origin; harmless otherwise
   video.src = clip.src;
+
+  // Wire the clip's audio into the export graph + speakers, and duck the music.
+  let clipSource: MediaElementAudioSourceNode | null = null;
+  let clipGain: GainNode | null = null;
+  if (wantsAudio && audio) {
+    try {
+      clipSource = audio.ctx.createMediaElementSource(video);
+      clipGain = audio.ctx.createGain();
+      clipGain.gain.value = 1;
+      clipSource.connect(clipGain);
+      clipGain.connect(audio.dest); // into the recording
+      clipGain.connect(audio.ctx.destination); // audible to the user
+      // Duck the music under the clip (same 0.3x target as the live preview).
+      audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.3, audio.ctx.currentTime, 0.15);
+    } catch (err) {
+      console.warn('Clip audio routing failed; rendering visuals only.', err);
+    }
+  }
+  const restoreMusic = () => {
+    if (wantsAudio && audio) {
+      audio.musicGain.gain.setTargetAtTime(audio.musicVolume, audio.ctx.currentTime, 0.15);
+    }
+    try {
+      clipGain?.disconnect();
+      clipSource?.disconnect();
+    } catch {
+      /* already torn down */
+    }
+  };
 
   // Wait for metadata/data, then seek to the trim in-point.
   await new Promise<void>((resolve) => {
@@ -321,6 +366,7 @@ async function renderClip(
     setTimeout(done, 5000);
   });
   if (_cancelled) {
+    restoreMusic();
     video.removeAttribute('src');
     video.load();
     return;
@@ -343,6 +389,7 @@ async function renderClip(
     });
   }
   if (_cancelled) {
+    restoreMusic();
     video.removeAttribute('src');
     video.load();
     return;
@@ -351,7 +398,7 @@ async function renderClip(
   try {
     await video.play();
   } catch {
-    /* autoplay of a muted element should succeed; ignore otherwise */
+    /* a user gesture already unlocked playback; ignore late rejections */
   }
 
   // Real-time playback loop. Draw each frame; overlay a black veil that lifts
@@ -371,6 +418,7 @@ async function renderClip(
     await sleep(1000 / fps);
   }
   video.pause();
+  restoreMusic(); // un-duck before the fade-out / next item
 
   // Fade out to black on the last frame so the next item starts clean.
   if (!_cancelled) {
@@ -397,9 +445,9 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   const { settings, intro, outro, eventName } = useStore.getState();
   onProgress(0, 'Preparing canvas…');
 
-  // Build the same shuffled/capped list the preview uses. The exported file now
-  // renders clips too (Phase 4): clip VISUALS are encoded in real time, muted —
-  // full clip-audio mixing is the Phase 5 item; the music bed carries the sound.
+  // Build the same shuffled/capped list the preview uses. The exported file
+  // renders clips in real time (Phase 4) AND mixes their audio when unmuted
+  // (Phase 5), ducking the music under each clip — mirroring the live preview.
   const { list, hold: effHold } = buildPlaybackList();
   const photos = list.filter((m): m is Photo => m.kind === 'photo');
   const clips = list.filter((m): m is Clip => m.kind === 'clip');
@@ -451,10 +499,20 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     }
   }
 
-  // Combine streams
+  // Audio bus handed to each clip so its sound mixes into the export (Phase 5).
+  const clipAudioBus: ClipAudioBus = {
+    ctx: audioCtx,
+    dest: audioDest,
+    musicGain: exportGain,
+    musicVolume: settings.musicVolume,
+  };
+  const hasClipAudio = clips.some((c) => !c.muted);
+
+  // Combine streams. Include the mixed audio track when there's music OR any
+  // unmuted clip — otherwise the clip's own sound would never reach the file.
   const canvasStream = canvas.captureStream(30);
   const tracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
-  if (decodedSongs.length) tracks.push(...audioDest.stream.getAudioTracks());
+  if (decodedSongs.length || hasClipAudio) tracks.push(...audioDest.stream.getAudioTracks());
   const combinedStream = new MediaStream(tracks);
 
   // MediaRecorder — pick codec based on user preference, with graceful fallback
@@ -560,7 +618,7 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
       if (prevImg && !prevWasClip) {
         await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration);
       }
-      await renderClip(ctx, W, H, item, settings.transitionDuration, fit, tick);
+      await renderClip(ctx, W, H, item, settings.transitionDuration, fit, tick, clipAudioBus);
       prevWasClip = true;
       prevImg = null;
       prevPlan = null;

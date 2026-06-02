@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Photo, Clip, MediaItem, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
-import { processImageFile } from '../lib/imageProcessing';
+import { processImageFile, rotateImage } from '../lib/imageProcessing';
 import { ingestVideo, convertToH264, extractStillFrame } from '../lib/videoIngest';
 import { partitionLivePhotos } from '../lib/livePhotos';
 import { readCaptureTime } from '../lib/exif';
@@ -57,6 +57,9 @@ export interface AppState {
   addVideos: (fileList: FileList | File[]) => Promise<void>;
   convertClip: (id: string) => Promise<void>;
   useClipAsPhoto: (id: string) => Promise<void>;
+  setClipTrim: (id: string, inPoint: number, outPoint: number) => void;
+  setClipMuted: (id: string, muted: boolean) => void;
+  rotatePhoto: (id: string, quarterTurns: number) => Promise<void>;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
   addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
   removeMedia: (id: string) => void;
@@ -72,6 +75,11 @@ export interface AppState {
   addSection: (beforePhotoId: string) => void;
   updateSection: (id: string, patch: Partial<SectionCard>) => void;
   removeSection: (id: string) => void;
+
+  // media edit modal (rotate photos / trim+mute clips)
+  editingId: string | null;
+  openEditor: (id: string) => void;
+  closeEditor: () => void;
 
   // project load
   replaceProject: (data: {
@@ -93,6 +101,7 @@ export const useStore = create<AppState>((set, get) => ({
   // user's last setup (framing, durations, motion, theme, export defaults).
   settings: { ...DEFAULT_SETTINGS, ...(loadPersistedSettings() ?? {}) },
   playback: { active: false, paused: false },
+  editingId: null,
 
   setEventName: (v) => set({ eventName: v }),
   setIntro: (patch) => set((s) => ({ intro: { ...s.intro, ...patch } })),
@@ -372,6 +381,68 @@ export const useStore = create<AppState>((set, get) => ({
     if (clip.revocable) URL.revokeObjectURL(clip.src);
     if (clip.posterRevocable && clip.posterUrl) URL.revokeObjectURL(clip.posterUrl);
     toast(`Using a still from "${clip.name}".`, 'success');
+  },
+
+  // ===== Media edit modal ===== (editingId initial value is set in the state block above)
+  openEditor: (id) => set({ editingId: id }),
+  closeEditor: () => set({ editingId: null }),
+
+  // Set a clip's trim window. Clamps both points into [0, naturalDuration] and
+  // enforces a minimum playable gap so the in/out handles can't cross or collapse.
+  setClipTrim: (id, inPoint, outPoint) => {
+    const MIN_GAP = 0.3; // seconds — shortest clip we allow after trimming
+    set((s) => ({
+      media: s.media.map((m) => {
+        if (m.id !== id || m.kind !== 'clip') return m;
+        const dur = m.naturalDuration || 0;
+        let inP = Math.max(0, Math.min(inPoint, dur));
+        let outP = Math.max(0, Math.min(outPoint, dur));
+        if (outP - inP < MIN_GAP) {
+          // Whichever handle the caller moved last wins; nudge the other to keep the gap.
+          if (inP !== m.inPoint) inP = Math.max(0, outP - MIN_GAP);
+          else outP = Math.min(dur, inP + MIN_GAP);
+        }
+        return { ...m, inPoint: inP, outPoint: outP };
+      }),
+    }));
+  },
+
+  setClipMuted: (id, muted) =>
+    set((s) => ({
+      media: s.media.map((m) => (m.id === id && m.kind === 'clip' ? { ...m, muted } : m)),
+    })),
+
+  // Rotate a photo by N quarter-turns, baking the result into a fresh downscaled
+  // image (see rotateImage). Swaps in the new url/dims, resets the Ken Burns plan
+  // (geometry changed) and revokes the old object URL once the new one is live.
+  rotatePhoto: async (id, quarterTurns) => {
+    const photo = get().media.find((m): m is Photo => m.kind === 'photo' && m.id === id);
+    if (!photo) return;
+    try {
+      const rotated = await rotateImage(photo.url, quarterTurns);
+      const oldUrl = photo.url;
+      const oldRevocable = photo.revocable;
+      set((s) => ({
+        media: s.media.map((m) =>
+          m.id === id && m.kind === 'photo'
+            ? {
+                ...m,
+                url: rotated.url,
+                revocable: rotated.revocable,
+                width: rotated.width,
+                height: rotated.height,
+                face: rotated.face,
+                kbPlan: undefined, // re-planned on next playback from the new geometry
+                loadError: false,
+              }
+            : m,
+        ),
+      }));
+      if (oldRevocable) URL.revokeObjectURL(oldUrl);
+    } catch (err) {
+      console.error('Rotate failed for', photo.name, err);
+      toast(`Couldn't rotate "${photo.name}".`, 'error');
+    }
   },
 
   addSongs: async (fileList) => {

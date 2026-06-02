@@ -39,6 +39,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
   const addVideos = useStore((s) => s.addVideos);
   const convertClip = useStore((s) => s.convertClip);
   const useClipAsPhoto = useStore((s) => s.useClipAsPhoto);
+  const openEditor = useStore((s) => s.openEditor);
   const addSongs = useStore((s) => s.addSongs);
   const addSection = useStore((s) => s.addSection);
   const removeMedia = useStore((s) => s.removeMedia);
@@ -62,7 +63,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
       chosenClass: 'sortable-chosen',
       // Action buttons must not start a drag (Sortable would otherwise swallow
       // their click). preventOnFilter:false lets the native click through.
-      filter: '.convert-btn, .remove-btn, .section-btn, .photo-action-btn, .use-photo-btn',
+      filter: '.convert-btn, .remove-btn, .section-btn, .photo-action-btn, .use-photo-btn, .edit-btn',
       preventOnFilter: false,
       onEnd: (evt) => {
         const { oldIndex, newIndex, from, item } = evt;
@@ -288,6 +289,10 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                       useClipAsPhoto(clip.id);
                       return;
                     }
+                    if (t.closest('.edit-btn')) {
+                      openEditor(clip.id);
+                      return;
+                    }
                     if (needsConvert || converting || errored) return; // not toggleable until playable
                     toggleMedia(clip.id);
                   }}
@@ -390,6 +395,21 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                   )}
 
                   <div className="photo-actions">
+                    {clip.status === 'ready' && (
+                      <button
+                        className="photo-action-btn edit-btn"
+                        title="Trim clip / audio"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditor(clip.id);
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       className="photo-action-btn remove-btn"
                       title="Remove"
@@ -433,6 +453,10 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                     }
                     return;
                   }
+                  if (t.closest('.edit-btn')) {
+                    openEditor(photo.id);
+                    return;
+                  }
                   toggleMedia(photo.id);
                 }}
               >
@@ -458,6 +482,14 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                   </span>
                 )}
                 <div className="photo-actions">
+                  {!photo.loadError && (
+                    <button className="photo-action-btn edit-btn" title="Rotate photo">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 4 23 10 17 10" />
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     className={'photo-action-btn section-btn' + (section ? ' active' : '')}
                     title={section ? 'Has a section card (edit in Setup)' : 'Add a section card before this photo'}

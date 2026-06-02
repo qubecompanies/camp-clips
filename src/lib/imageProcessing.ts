@@ -124,6 +124,54 @@ function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/jpeg', quality = 
   });
 }
 
+// Re-render an already-processed image rotated by N quarter-turns clockwise.
+// Used by the per-photo edit modal for the rare EXIF-orientation miss. We bake
+// the rotation into a NEW downscaled blob (rather than carrying a rotation flag
+// through playback/export) so every downstream consumer keeps treating a photo
+// as a plain upright url + width/height. Memory-safe: one decoded image + one
+// canvas at a time, matching processImageFile's discipline. Face framing is
+// re-detected on the rotated canvas since the old coordinates no longer apply.
+export async function rotateImage(url: string, quarterTurns: number): Promise<ProcessedImage> {
+  const turns = ((quarterTurns % 4) + 4) % 4; // normalize to 0..3
+  // Load the current image. It's our own object/data URL, so no CORS taint.
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('rotate: image load failed'));
+    el.src = url;
+  });
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const swap = turns === 1 || turns === 3;
+  const canvas = document.createElement('canvas');
+  canvas.width = swap ? h : w;
+  canvas.height = swap ? w : h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((turns * Math.PI) / 2);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+
+  const outBlob = await canvasToBlob(canvas, 'image/jpeg', 0.88);
+
+  let face: FaceFraming | null = null;
+  try {
+    face = await detectFaceFraming(canvas);
+  } catch (e) {
+    /* non-fatal — leave face null */
+  }
+
+  // Free the backing store before allocating the URL.
+  const newW = canvas.width;
+  const newH = canvas.height;
+  canvas.width = 0;
+  canvas.height = 0;
+
+  const usable = await blobToUsableUrl(outBlob);
+  return { ...usable, width: newW, height: newH, face };
+}
+
 // Process a single image file into a {url, width, height} record.
 // Memory-safe: at no point do we hold both the original and the downscaled in memory.
 export async function processImageFile(file: File): Promise<ProcessedImage> {

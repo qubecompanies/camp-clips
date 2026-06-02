@@ -1329,6 +1329,137 @@ input[type="range"]::-moz-range-thumb {
 
 .file-input { display: none; }
 
+/* ========== MEDIA EDIT MODAL (rotate photos / trim clips) ========== */
+/* Edit/rotate/trim action button must NOT turn red on hover — red is reserved
+   for remove. Tint it with the brand accent instead (matches section-btn). */
+.photo-card .photo-action-btn.edit-btn:hover,
+.clip-card .photo-action-btn.edit-btn:hover { background: var(--accent); }
+
+.media-edit-modal { max-width: 560px; }
+
+.media-edit-preview {
+  position: relative;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 46vh;
+  margin-bottom: 16px;
+}
+.media-edit-preview img,
+.media-edit-preview video {
+  max-width: 100%;
+  max-height: 46vh;
+  display: block;
+  object-fit: contain;
+}
+.media-edit-preview img.is-busy { opacity: 0.5; transition: opacity 0.15s; }
+
+.clip-preview-btn {
+  position: absolute;
+  bottom: 10px; left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.clip-preview-btn:hover { border-color: var(--primary); }
+
+.media-edit-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+/* ---- Trim scrubber ---- */
+.trim-track {
+  position: relative;
+  height: 56px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-elevated);
+  margin: 6px 0 12px;
+  touch-action: none; /* let pointer drags drive the handles, not scroll */
+  user-select: none;
+}
+.trim-track-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.55;
+  pointer-events: none;
+}
+/* Dimmed wings = the trimmed-away head/tail. The clear band between is kept. */
+.trim-cut {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(0,0,0,0.62);
+  pointer-events: none;
+}
+.trim-cut-left { left: 0; }
+.trim-cut-right { right: 0; }
+.trim-band {
+  position: absolute;
+  top: 0; bottom: 0;
+  border-top: 2px solid var(--primary);
+  border-bottom: 2px solid var(--primary);
+  pointer-events: none;
+}
+.trim-handle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 16px;
+  margin-left: -8px;
+  background: var(--primary);
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  touch-action: none;
+}
+/* Distinct shapes so the two handles read without relying on color:
+   the IN handle squares off its right edge, the OUT handle its left. */
+.trim-handle-in { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.trim-handle-out { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.trim-handle-grip {
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.55);
+}
+
+.trim-readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 14px;
+}
+.trim-readout strong { color: var(--text-primary); font-weight: 600; }
+
+/* Audio mute toggle — "on" state tinted with brand accent, not green. */
+.clip-mute-toggle.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* small responsive */
 @media (max-width: 900px) {
   .sidebar { width: 280px; }

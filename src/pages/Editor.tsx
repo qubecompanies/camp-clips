@@ -6,6 +6,7 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { PlaybackOverlay } from '../components/PlaybackOverlay';
 import { ExportModal } from '../components/ExportModal';
 import { GooglePhotosModal } from '../components/GooglePhotosModal';
+import { MediaEditModal } from '../components/MediaEditModal';
 import { Toast } from '../components/Toast';
 import { startPlayback, stopPlayback, togglePause } from '../lib/playback';
 import { unlockAudio } from '../lib/audioContext';
@@ -50,6 +51,7 @@ export default function Editor() {
       <PlaybackOverlay />
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
       {showGooglePhotos && <GooglePhotosModal onClose={() => setShowGooglePhotos(false)} />}
+      <MediaEditModal />
       <Toast />
     </>
   );
