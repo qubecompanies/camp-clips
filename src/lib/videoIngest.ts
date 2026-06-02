@@ -21,6 +21,54 @@ import { MAX_IMAGE_DIM, blobToUsableUrl } from './imageProcessing';
 const POSTER_SEEK_FRACTION = 0.1;
 const POSTER_SEEK_MAX = 1.0; // seconds
 
+// A timeout that only counts down while the page is VISIBLE. Browsers suspend
+// off-screen <video> decoding/seeking in a background tab, so a plain setTimeout
+// would fire mid-suspend and wrongly fail a clip just because the user switched
+// tabs during import. Pausing the countdown while hidden lets ingest finish when
+// they come back. Returns the promise plus a cancel() to clear it on success.
+function visibleTimeout(ms: number): { promise: Promise<void>; cancel: () => void } {
+  let remaining = ms;
+  let timer: number | undefined;
+  let startedAt = 0;
+  let done = false;
+  let resolveFn: () => void = () => {};
+  const promise = new Promise<void>((res) => {
+    resolveFn = res;
+  });
+
+  const arm = () => {
+    if (done || document.hidden) return;
+    startedAt = Date.now();
+    timer = window.setTimeout(() => {
+      done = true;
+      teardown();
+      resolveFn();
+    }, remaining);
+  };
+  const disarm = () => {
+    if (timer != null) {
+      window.clearTimeout(timer);
+      timer = undefined;
+      remaining = Math.max(0, remaining - (Date.now() - startedAt));
+    }
+  };
+  const onVis = () => (document.hidden ? disarm() : arm());
+  const teardown = () => {
+    document.removeEventListener('visibilitychange', onVis);
+    if (timer != null) window.clearTimeout(timer);
+  };
+
+  document.addEventListener('visibilitychange', onVis);
+  arm();
+  return {
+    promise,
+    cancel: () => {
+      done = true;
+      teardown();
+    },
+  };
+}
+
 export interface VideoProbe {
   decodable: boolean; // false ⇒ this browser can't decode it (HEVC on Chrome/Windows)
   width: number;
@@ -51,6 +99,9 @@ function probeVideoEl(src: string): Promise<VideoProbe> {
     video.crossOrigin = 'anonymous';
 
     let settled = false;
+    // Visibility-aware safety net: only counts down while the tab is visible, so
+    // switching away mid-import doesn't trip it and wrongly fail the clip.
+    const safety = visibleTimeout(8000);
     const finish = (probe: VideoProbe) => {
       if (settled) return;
       settled = true;
@@ -58,6 +109,7 @@ function probeVideoEl(src: string): Promise<VideoProbe> {
       resolve(probe);
     };
     const cleanup = () => {
+      safety.cancel();
       video.removeAttribute('src');
       video.load();
     };
@@ -78,8 +130,7 @@ function probeVideoEl(src: string): Promise<VideoProbe> {
     video.addEventListener('error', () => finish({ decodable: false, width: 0, height: 0, naturalDuration: 0 }), {
       once: true,
     });
-    // Safety net — never hang the import on a file the browser silently chokes on.
-    setTimeout(() => finish({ decodable: false, width: 0, height: 0, naturalDuration: 0 }), 8000);
+    safety.promise.then(() => finish({ decodable: false, width: 0, height: 0, naturalDuration: 0 }));
 
     video.src = src;
   });
@@ -102,23 +153,40 @@ async function grabFrame(
   (video as HTMLVideoElement & { playsInline: boolean }).playsInline = true;
 
   try {
+    const loadTimer = visibleTimeout(8000);
     await new Promise<void>((resolve, reject) => {
       video.addEventListener('loadeddata', () => resolve(), { once: true });
       video.addEventListener('error', () => reject(new Error('frame load failed')), { once: true });
-      setTimeout(() => reject(new Error('frame load timeout')), 8000);
+      loadTimer.promise.then(() => reject(new Error('frame load timeout')));
       video.src = src;
-    });
+    }).finally(() => loadTimer.cancel());
 
-    // Seek to the requested frame and wait for it to paint.
+    // Seek to the requested frame and wait for it to paint. A hidden tab can
+    // stall the seek, so we (a) only time out on visible time and (b) re-kick the
+    // seek when the tab regains focus.
+    const seekTimer = visibleTimeout(4000);
+    const reseekOnVisible = () => {
+      if (!document.hidden) {
+        try {
+          video.currentTime = Math.max(0, atTime);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', reseekOnVisible);
     await new Promise<void>((resolve, reject) => {
       video.addEventListener('seeked', () => resolve(), { once: true });
       video.addEventListener('error', () => reject(new Error('frame seek failed')), { once: true });
-      setTimeout(() => resolve(), 4000); // draw whatever we have rather than hang
+      seekTimer.promise.then(() => resolve()); // draw whatever we have rather than hang
       try {
         video.currentTime = Math.max(0, atTime);
       } catch {
         resolve();
       }
+    }).finally(() => {
+      seekTimer.cancel();
+      document.removeEventListener('visibilitychange', reseekOnVisible);
     });
 
     // Downscale to the same ceiling photos use, so a clip frame never costs
