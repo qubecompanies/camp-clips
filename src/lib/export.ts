@@ -4,7 +4,7 @@ import { ensureKbPlan, drawKB } from './kenBurns';
 import { TEMPLATES } from './templates';
 import { sleep, fmtTime, easeInOut } from './utils';
 import { toast } from '../state/toastStore';
-import type { KbPlan, ExportAspect, ExportRes, Photo } from '../state/types';
+import type { KbPlan, ExportAspect, ExportRes, Photo, Clip } from '../state/types';
 
 // Map the chosen aspect + resolution to canvas pixels and a target bitrate.
 // `exportRes` is treated as the SHORT edge (the conventional meaning of
@@ -267,17 +267,145 @@ async function renderHoldKB(
   }
 }
 
+// Draw the current frame of a <video> onto the canvas, letterboxed/cropped to
+// match the chosen photoFit (mirrors drawKB's framing but for live video).
+function drawVideoFrame(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  video: HTMLVideoElement,
+  fit: 'cover' | 'contain',
+): void {
+  const vw = video.videoWidth || W;
+  const vh = video.videoHeight || H;
+  const scale = fit === 'cover' ? Math.max(W / vw, H / vh) : Math.min(W / vw, H / vh);
+  const dw = vw * scale;
+  const dh = vh * scale;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
+// Render a clip's trimmed range to the canvas in real time, captured by the
+// MediaRecorder via the canvas stream. Clip AUDIO is intentionally muted in the
+// export — full clip-audio mixing is the Phase 5 item; the music bed carries
+// the soundtrack. We fade in from / out to black so clips read as clean cuts
+// regardless of what precedes or follows them.
+async function renderClip(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  clip: Clip,
+  transSec: number,
+  fit: 'cover' | 'contain',
+  onTick: () => void,
+): Promise<void> {
+  const fps = 30;
+  const fadeFrames = Math.max(1, Math.round(transSec * fps));
+  const video = document.createElement('video');
+  video.muted = true; // Phase 4: visuals only; clip audio mixing is Phase 5
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.src = clip.src;
+
+  // Wait for metadata/data, then seek to the trim in-point.
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    video.onloadeddata = done;
+    video.onerror = done;
+    setTimeout(done, 5000);
+  });
+  if (_cancelled) {
+    video.removeAttribute('src');
+    video.load();
+    return;
+  }
+
+  const inPoint = Math.max(0, clip.inPoint);
+  const endAt = clip.outPoint > inPoint ? clip.outPoint : video.duration || inPoint;
+  if (Math.abs(video.currentTime - inPoint) > 0.05) {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      video.onseeked = done;
+      video.onerror = done;
+      setTimeout(done, 5000);
+      video.currentTime = inPoint;
+    });
+  }
+  if (_cancelled) {
+    video.removeAttribute('src');
+    video.load();
+    return;
+  }
+
+  try {
+    await video.play();
+  } catch {
+    /* autoplay of a muted element should succeed; ignore otherwise */
+  }
+
+  // Real-time playback loop. Draw each frame; overlay a black veil that lifts
+  // over the first `fadeFrames` frames (fade-in from black).
+  let frame = 0;
+  while (!_cancelled && !video.ended && video.currentTime < endAt) {
+    drawVideoFrame(ctx, W, H, video, fit);
+    if (frame < fadeFrames) {
+      ctx.save();
+      ctx.globalAlpha = 1 - frame / fadeFrames;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+    frame++;
+    onTick && onTick();
+    await sleep(1000 / fps);
+  }
+  video.pause();
+
+  // Fade out to black on the last frame so the next item starts clean.
+  if (!_cancelled) {
+    for (let f = 0; f <= fadeFrames; f++) {
+      if (_cancelled) break;
+      drawVideoFrame(ctx, W, H, video, fit);
+      ctx.save();
+      ctx.globalAlpha = f / fadeFrames;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      onTick && onTick();
+      await sleep(1000 / fps);
+    }
+  }
+
+  video.removeAttribute('src');
+  video.load();
+}
+
 export type ExportProgress = (pct: number, text: string) => void;
 
 export async function doExport(onProgress: ExportProgress): Promise<'done' | 'cancelled'> {
   const { settings, intro, outro, eventName } = useStore.getState();
   onProgress(0, 'Preparing canvas…');
 
-  // Build the same shuffled/capped list the preview uses. Clip rendering in the
-  // exported file is Phase 4 — for now the encoder draws photos only and skips
-  // clips. (Live preview already plays clips; export will catch up next phase.)
+  // Build the same shuffled/capped list the preview uses. The exported file now
+  // renders clips too (Phase 4): clip VISUALS are encoded in real time, muted —
+  // full clip-audio mixing is the Phase 5 item; the music bed carries the sound.
   const { list, hold: effHold } = buildPlaybackList();
   const photos = list.filter((m): m is Photo => m.kind === 'photo');
+  const clips = list.filter((m): m is Clip => m.kind === 'clip');
+  const clipSeconds = clips.reduce((s, c) => s + Math.max(0, c.outPoint - c.inPoint), 0);
+  // Each clip is bracketed by a fade-in and fade-out to black (~2 transitions).
+  const clipOverhead = clipSeconds + clips.length * 2 * settings.transitionDuration;
   // Section title cards interleaved before their anchor photos (linear runs only).
   const looped = computePlan().looped;
   const cards = sectionMap(photos, looped);
@@ -292,13 +420,11 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   // pre-load images (deduplicated — looped lists reuse the same photo)
   onProgress(0, 'Loading images…');
   const imageCache = new Map<string, HTMLImageElement>();
-  const loadedImages: HTMLImageElement[] = [];
   for (let i = 0; i < photos.length; i++) {
     if (!imageCache.has(photos[i].url)) {
       imageCache.set(photos[i].url, await loadImage(photos[i].url));
     }
-    loadedImages.push(imageCache.get(photos[i].url)!);
-    onProgress((i / photos.length) * 10, 'Loading images…');
+    onProgress((i / Math.max(1, photos.length)) * 10, 'Loading images…');
   }
 
   // Build audio graph using Web Audio API (no <audio> elements — works in webviews)
@@ -372,7 +498,8 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
       photos.length * effHold +
       Math.max(0, photos.length - 1) * settings.transitionDuration +
       (outro.title ? outro.duration : 0) +
-      sectionTime;
+      sectionTime +
+      clipOverhead;
     let scheduledTime = 0;
     let idx = 0;
     const startAt = audioCtx.currentTime + 0.1; // small lead-in
@@ -398,7 +525,8 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     photos.length * effHold +
     Math.max(0, photos.length - 1) * settings.transitionDuration +
     (outro.title ? outro.duration : 0) +
-    sectionTime;
+    sectionTime +
+    clipOverhead;
 
   const renderStart = performance.now();
   const tpl = TEMPLATES[settings.templateId] || TEMPLATES.default;
@@ -415,27 +543,50 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     await renderTextFrames(ctx, W, H, intro.title, intro.subtitle, intro.duration, tick, { titleStyle });
   }
 
-  // Photos with cross-fade + continuous Ken Burns motion
+  // Walk the unified media list: photos cross-fade with continuous Ken Burns
+  // motion; clips play in real time bracketed by fades to/from black. A clip
+  // breaks the photo crossfade chain, so a photo following a clip fades in from
+  // black rather than crossfading from a frame that's no longer on screen.
   const transFrac = settings.transitionDuration / (settings.transitionDuration + effHold);
+  const fit: 'cover' | 'contain' = settings.photoFit === 'cover' ? 'cover' : 'contain';
   let prevPlan: KbPlan | null = null;
-  for (let i = 0; i < loadedImages.length && !_cancelled; i++) {
-    const plan = ensureKbPlan(photos[i], loadedImages[i].width, loadedImages[i].height);
-    const card = cards.get(photos[i].id);
+  let prevImg: HTMLImageElement | null = null;
+  let prevWasClip = false;
+  let firstItem = true;
+  for (let i = 0; i < list.length && !_cancelled; i++) {
+    const item = list[i];
+    if (item.kind === 'clip') {
+      // Cleanly close out a preceding photo so we don't jump-cut into the clip.
+      if (prevImg && !prevWasClip) {
+        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration);
+      }
+      await renderClip(ctx, W, H, item, settings.transitionDuration, fit, tick);
+      prevWasClip = true;
+      prevImg = null;
+      prevPlan = null;
+      firstItem = false;
+      continue;
+    }
+
+    // Photo
+    const img = imageCache.get(item.url)!;
+    const plan = ensureKbPlan(item, img.width, img.height);
+    const card = cards.get(item.id);
     if (card) {
       // Fade the previous photo out, render the section card, then fade this
       // photo in from black (so the card reads as a clean chapter break).
-      if (i > 0) await renderFadeOutKB(ctx, W, H, loadedImages[i - 1], prevPlan, 1.0, 0.8);
+      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8);
       await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, tick, { titleStyle });
-      await renderFadeInKB(ctx, W, H, loadedImages[i], plan, 0, transFrac, settings.transitionDuration, tick);
-    } else if (i > 0) {
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick);
+    } else if (!firstItem && prevImg && !prevWasClip) {
       await renderCrossfadeKB(
         ctx,
         W,
         H,
-        loadedImages[i - 1],
+        prevImg,
         prevPlan,
         1.0, // outgoing photo at end of its motion
-        loadedImages[i],
+        img,
         plan,
         0,
         transFrac, // incoming photo starts its motion
@@ -443,16 +594,22 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
         tick,
       );
     } else {
-      await renderFadeInKB(ctx, W, H, loadedImages[i], plan, 0, transFrac, settings.transitionDuration, tick);
+      // First item overall, or the first photo coming out of a clip → fade in.
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick);
     }
     // hold: continue this photo's motion from transFrac to 1.0
-    await renderHoldKB(ctx, W, H, loadedImages[i], plan, transFrac, 1.0, effHold, tick);
+    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, tick);
     prevPlan = plan;
+    prevImg = img;
+    prevWasClip = false;
+    firstItem = false;
   }
 
   // Outro
   if (outro.title && !_cancelled) {
-    await renderFadeOutKB(ctx, W, H, loadedImages[loadedImages.length - 1], prevPlan, 1.0, 0.8);
+    // If the last visible item was a photo, fade it out first; coming out of a
+    // clip we're already on black, so go straight to the title.
+    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8);
     await renderTextFrames(ctx, W, H, outro.title, outro.subtitle, outro.duration, tick, { titleStyle });
   }
 
