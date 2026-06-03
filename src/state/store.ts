@@ -8,6 +8,7 @@ import { ensureAudioCtx, getGainNode } from '../lib/audioContext';
 import { trackUrl } from '../lib/musicLibrary';
 import { isImageFile, isAudioFile, isVideoFile, uid, shuffle } from '../lib/utils';
 import { loadPersistedSettings, persistSettings } from '../lib/preferences';
+import { persistAutosave, loadAutosave } from '../lib/autosave';
 import { toast } from './toastStore';
 
 // Defaults the app falls back to on first run (or when a persisted blob is
@@ -80,6 +81,9 @@ export interface AppState {
   editingId: string | null;
   openEditor: (id: string) => void;
   closeEditor: () => void;
+
+  // text autosave restore (silent; media binaries never persisted)
+  restoreAutosave: () => boolean;
 
   // project load
   replaceProject: (data: {
@@ -387,6 +391,23 @@ export const useStore = create<AppState>((set, get) => ({
   openEditor: (id) => set({ editingId: id }),
   closeEditor: () => set({ editingId: null }),
 
+  // Restore the last autosaved text (event name + intro/outro + section cards).
+  // Called once when the Editor mounts. Media/songs are never persisted, so this
+  // only rehydrates text. Section cards anchor to photo ids that won't exist on a
+  // fresh load — they're harmless (just never render) until their anchor returns.
+  // Returns true if something was actually restored so the caller can toast.
+  restoreAutosave: () => {
+    const snap = loadAutosave();
+    if (!snap) return false;
+    set((s) => ({
+      eventName: snap.eventName ?? s.eventName,
+      intro: snap.intro ?? s.intro,
+      outro: snap.outro ?? s.outro,
+      sections: Array.isArray(snap.sections) ? snap.sections : s.sections,
+    }));
+    return true;
+  },
+
   // Set a clip's trim window. Clamps both points into [0, naturalDuration] and
   // enforces a minimum playable gap so the in/out handles can't cross or collapse.
   setClipTrim: (id, inPoint, outPoint) => {
@@ -656,3 +677,26 @@ export const isPhoto = (m: MediaItem): m is Photo => m.kind === 'photo';
 export const isClip = (m: MediaItem): m is Clip => m.kind === 'clip';
 export const selectPhotos = (s: AppState): Photo[] => s.media.filter(isPhoto);
 export const selectClips = (s: AppState): Clip[] => s.media.filter(isClip);
+
+// ===== Text autosave subscription =====
+// Silently snapshot the show's TEXT (event name + intro/outro + section cards)
+// to localStorage whenever any of it changes. Debounced inside persistAutosave so
+// per-keystroke edits don't hammer storage. Media/songs are deliberately never
+// serialized — browsers can't re-hydrate a File and the product promise is that
+// nothing about your media leaves the device. (Settings persist separately via
+// preferences.ts; explicit file save/load lives in persistence.ts.)
+useStore.subscribe((state, prev) => {
+  if (
+    state.eventName !== prev.eventName ||
+    state.intro !== prev.intro ||
+    state.outro !== prev.outro ||
+    state.sections !== prev.sections
+  ) {
+    persistAutosave({
+      eventName: state.eventName,
+      intro: state.intro,
+      outro: state.outro,
+      sections: state.sections,
+    });
+  }
+});

@@ -21,3 +21,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>,
 );
+
+// Register the service worker for offline + installability. Production only —
+// in dev it would cache Vite's HMR modules and fight the dev server. We register
+// after load so it never competes with the first paint for bandwidth.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
+      console.warn('[sw] registration failed:', err);
+    });
+  });
+}

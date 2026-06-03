@@ -10,10 +10,19 @@ import { MediaEditModal } from '../components/MediaEditModal';
 import { Toast } from '../components/Toast';
 import { startPlayback, stopPlayback, togglePause } from '../lib/playback';
 import { unlockAudio } from '../lib/audioContext';
+import { toast } from '../state/toastStore';
 
 export default function Editor() {
   const [showExport, setShowExport] = useState(false);
   const [showGooglePhotos, setShowGooglePhotos] = useState(false);
+
+  // Restore the last autosaved text (event name + intro/outro + sections) once
+  // on mount. Media never persists, so this only brings back what you typed.
+  useEffect(() => {
+    if (useStore.getState().restoreAutosave()) {
+      toast('Restored your last show’s text. Re-add your photos and music to continue.', 'info');
+    }
+  }, []);
 
   // Keyboard shortcuts while playing
   useEffect(() => {

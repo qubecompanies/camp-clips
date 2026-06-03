@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useStore } from '../state/store';
 import { computePlan, getIncludedPhotos, getIncludedClips, getIncludedSongs, totalClipSeconds } from '../lib/planning';
 import { saveProject, loadProject } from '../lib/persistence';
@@ -7,6 +7,12 @@ import { fmtTime } from '../lib/utils';
 interface Props {
   onPlay: () => void;
   onExport: () => void;
+}
+
+// The PWA install prompt event isn't in TS's standard lib yet. Minimal shape.
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
 export function AppHeader({ onPlay, onExport }: Props) {
@@ -19,6 +25,33 @@ export function AppHeader({ onPlay, onExport }: Props) {
   const intro = useStore((s) => s.intro);
   const outro = useStore((s) => s.outro);
   const loadInputRef = useRef<HTMLInputElement>(null);
+
+  // PWA install: capture the browser's deferred install prompt and surface our
+  // own "Install" button only when the app is actually installable (and not
+  // already installed). Chrome/Edge/Android fire beforeinstallprompt; iOS Safari
+  // doesn't, so the button simply never appears there — by design.
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault(); // stop Chrome's mini-infobar; we drive the prompt ourselves
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    // The event can only be used once; drop it whether they accepted or dismissed.
+    setInstallPrompt(null);
+  };
 
   const photoCount = getIncludedPhotos().length;
   const clipCount = getIncludedClips().length;
@@ -77,6 +110,14 @@ export function AppHeader({ onPlay, onExport }: Props) {
         </div>
       </div>
       <div className="header-actions">
+        {installPrompt && (
+          <button className="btn btn-ghost" title="Install Camp Clips as an app" onClick={handleInstall}>
+            <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 3v12M7 12l5 5 5-5M5 21h14" />
+            </svg>
+            Install
+          </button>
+        )}
         <input
           ref={loadInputRef}
           type="file"
