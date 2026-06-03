@@ -222,7 +222,11 @@ html.cc-landing-mode body { background: #ffffff; }
 }
 .cc-landing .app-preview .preview-actions { margin-left: auto; display: flex; gap: 8px; }
 .cc-landing .app-preview .preview-btn { padding: 6px 12px; border-radius: 5px; font-size: 11px; font-weight: 600; }
-.cc-landing .app-preview .app-body { padding: 24px 20px; }
+/* The editor's global `.app-body` (index.css) is `display:flex; height:calc(100vh-60px)`
+   and is loaded app-wide. This mockup reuses the class name, so we must explicitly
+   reset display+height or the device stretches to full viewport height and the tile
+   rows scatter. */
+.cc-landing .app-preview .app-body { display: block; height: auto; padding: 24px 20px; }
 .cc-landing .app-preview .preview-event {
   color: #fce7b5;
   font-family: 'Fraunces', serif;
