@@ -61,6 +61,7 @@ export interface AppState {
   setClipTrim: (id: string, inPoint: number, outPoint: number) => void;
   setClipMuted: (id: string, muted: boolean) => void;
   rotatePhoto: (id: string, quarterTurns: number) => Promise<void>;
+  setPhotoCaption: (id: string, caption: string) => void;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
   addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
   removeMedia: (id: string) => void;
@@ -452,6 +453,17 @@ export const useStore = create<AppState>((set, get) => ({
   setClipMuted: (id, muted) =>
     set((s) => ({
       media: s.media.map((m) => (m.id === id && m.kind === 'clip' ? { ...m, muted } : m)),
+    })),
+
+  // Set (or clear) a photo's caption. Captions live on the in-memory Photo only —
+  // like the photo binaries themselves they are never serialized to localStorage,
+  // and they can't re-anchor across a reload, so they're intentionally not part of
+  // autosave. Empty/whitespace clears the caption back to undefined.
+  setPhotoCaption: (id, caption) =>
+    set((s) => ({
+      media: s.media.map((m) =>
+        m.id === id && m.kind === 'photo' ? { ...m, caption: caption.trim() ? caption : undefined } : m,
+      ),
     })),
 
   // Rotate a photo by N quarter-turns, baking the result into a fresh downscaled

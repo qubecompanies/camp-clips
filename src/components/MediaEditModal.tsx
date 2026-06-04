@@ -36,9 +36,19 @@ export function MediaEditModal() {
   );
 }
 
+const CAPTION_MAX = 80;
+
 function PhotoEditor({ photo, onClose }: { photo: Photo; onClose: () => void }) {
   const rotatePhoto = useStore((s) => s.rotatePhoto);
+  const setPhotoCaption = useStore((s) => s.setPhotoCaption);
   const [busy, setBusy] = useState(false);
+  // Local caption state for a responsive field; committed to the store on change.
+  const [caption, setCaption] = useState(photo.caption ?? '');
+
+  // Re-sync if the modal is reused for a different photo without unmounting.
+  useEffect(() => {
+    setCaption(photo.caption ?? '');
+  }, [photo.id, photo.caption]);
 
   const rotate = async (turns: number) => {
     if (busy) return;
@@ -47,12 +57,19 @@ function PhotoEditor({ photo, onClose }: { photo: Photo; onClose: () => void }) 
     setBusy(false);
   };
 
+  const onCaptionChange = (v: string) => {
+    const next = v.slice(0, CAPTION_MAX);
+    setCaption(next);
+    setPhotoCaption(photo.id, next);
+  };
+
   return (
     <>
       <h2>Edit photo</h2>
-      <p>Rotate a photo that came in sideways. Each tap turns it a quarter turn.</p>
+      <p>Rotate a photo that came in sideways, or add a caption that shows on this slide.</p>
       <div className="media-edit-preview">
         <img src={photo.url} alt={photo.name} className={busy ? 'is-busy' : ''} />
+        {caption.trim() && <div className="media-edit-caption-preview">{caption}</div>}
       </div>
       <div className="media-edit-controls">
         <button className="btn" onClick={() => rotate(-1)} disabled={busy} title="Rotate left">
@@ -69,6 +86,20 @@ function PhotoEditor({ photo, onClose }: { photo: Photo; onClose: () => void }) 
           </svg>
           Rotate right
         </button>
+      </div>
+      <div className="media-edit-caption">
+        <label htmlFor="photo-caption">Caption</label>
+        <input
+          id="photo-caption"
+          type="text"
+          value={caption}
+          maxLength={CAPTION_MAX}
+          placeholder="e.g. Sunrise hike, Day 3"
+          onChange={(e) => onCaptionChange(e.target.value)}
+        />
+        <span className="caption-count">
+          {caption.length}/{CAPTION_MAX}
+        </span>
       </div>
       <div className="modal-actions">
         <button className="btn btn-primary" onClick={onClose} disabled={busy}>

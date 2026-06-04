@@ -475,6 +475,15 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                   </div>
                 </div>
                 <span className="photo-index">{index}</span>
+                {photo.caption && !photo.loadError && (
+                  <span
+                    className="photo-caption-chip"
+                    title={`Caption: ${photo.caption}`}
+                    style={section ? { bottom: 36 } : undefined}
+                  >
+                    {photo.caption}
+                  </span>
+                )}
                 {section && (
                   <span className="photo-section-badge" title={`Section card: ${section.title || 'Untitled'}`}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -487,7 +496,7 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                 )}
                 <div className="photo-actions">
                   {!photo.loadError && (
-                    <button className="photo-action-btn edit-btn" title="Rotate photo">
+                    <button className="photo-action-btn edit-btn" title="Edit photo — rotate or add a caption">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="23 4 23 10 17 10" />
                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />

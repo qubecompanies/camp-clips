@@ -470,6 +470,25 @@ input[type="range"]::-moz-range-thumb {
   text-overflow: ellipsis;
 }
 .photo-card .photo-section-badge svg { flex-shrink: 0; }
+
+/* Caption indicator on a photo tile — shows the caption text inline (truncated),
+   doubling as the "this photo has a caption" signal. Dark scrim, no color cue. */
+.photo-card .photo-caption-chip {
+  position: absolute;
+  bottom: 6px; left: 6px; right: 6px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  pointer-events: none;
+}
+
 .photo-card.sortable-ghost { opacity: 0.4; }
 .photo-card.sortable-chosen { cursor: grabbing; }
 
@@ -1068,6 +1087,33 @@ input[type="range"]::-moz-range-thumb {
   opacity: 1;
 }
 
+/* Photo caption — a bottom-centered pill that fades in/out with its photo.
+   Dark scrim + white text reads over any photo and without color (the live
+   mirror of export.ts drawCaption). */
+.playback-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  max-width: 82%;
+  padding: 0.5em 0.9em;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: clamp(15px, 2.4vw, 30px);
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity var(--fade-duration, 1500ms) ease-in-out;
+  pointer-events: none;
+}
+.playback-caption.visible { opacity: 1; }
+
 .playback-controls {
   position: absolute;
   bottom: 30px;
@@ -1380,6 +1426,63 @@ input[type="range"]::-moz-range-thumb {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 4px;
+}
+
+/* ---- Photo caption field ---- */
+.media-edit-caption {
+  position: relative;
+  margin-top: 14px;
+}
+.media-edit-caption label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.media-edit-caption input {
+  width: 100%;
+  padding: 9px 56px 9px 12px; /* room for the counter on the right */
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+}
+.media-edit-caption input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.media-edit-caption .caption-count {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Caption preview pill over the photo in the edit modal — mirrors playback. */
+.media-edit-caption-preview {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  max-width: 86%;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 /* ---- Trim scrubber ---- */

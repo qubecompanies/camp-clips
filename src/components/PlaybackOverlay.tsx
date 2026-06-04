@@ -21,6 +21,7 @@ export function PlaybackOverlay() {
   const textOverlayRef = useRef<HTMLDivElement>(null);
   const textTitleRef = useRef<HTMLHeadingElement>(null);
   const textSubtitleRef = useRef<HTMLParagraphElement>(null);
+  const captionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (
@@ -31,7 +32,8 @@ export function PlaybackOverlay() {
       videoRef.current &&
       textOverlayRef.current &&
       textTitleRef.current &&
-      textSubtitleRef.current
+      textSubtitleRef.current &&
+      captionRef.current
     ) {
       setPlaybackRefs({
         overlay: overlayRef.current,
@@ -41,6 +43,7 @@ export function PlaybackOverlay() {
         textOverlay: textOverlayRef.current,
         textOverlayTitle: textTitleRef.current,
         textOverlaySubtitle: textSubtitleRef.current,
+        caption: captionRef.current,
         playbackProgress: progressRef.current,
       });
     }
@@ -93,6 +96,7 @@ export function PlaybackOverlay() {
           <h1 ref={textTitleRef} />
           <p ref={textSubtitleRef} />
         </div>
+        <div className="playback-caption" ref={captionRef} />
       </div>
       <div className="playback-controls">
         <button className="btn" onClick={togglePause}>

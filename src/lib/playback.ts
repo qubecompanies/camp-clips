@@ -33,7 +33,21 @@ interface PlaybackRefs {
   textOverlay: HTMLElement;
   textOverlayTitle: HTMLElement;
   textOverlaySubtitle: HTMLElement;
+  caption: HTMLElement;
   playbackProgress: HTMLElement;
+}
+
+// Show or hide the photo caption overlay. Text is set before revealing so the
+// CSS opacity transition (tied to --fade-duration) fades it in with the photo.
+function setCaption(text?: string): void {
+  if (!refs) return;
+  const el = refs.caption;
+  if (text && text.trim()) {
+    el.textContent = text;
+    el.classList.add('visible');
+  } else {
+    el.classList.remove('visible');
+  }
 }
 
 let refs: PlaybackRefs | null = null;
@@ -163,6 +177,7 @@ export function stopPlayback(): void {
   imgA.classList.remove('visible');
   imgB.classList.remove('visible');
   textOverlay.classList.remove('visible');
+  refs.caption.classList.remove('visible');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   playbackProgress.style.width = '0%';
 }
@@ -294,6 +309,7 @@ async function crossfadeToClip(
   const { video, imgA, imgB, textOverlay } = refs;
   const { settings } = useStore.getState();
   textOverlay.classList.remove('visible');
+  setCaption(); // captions are photo-only — hide while a clip plays
 
   video.style.objectFit = settings.photoFit; // match the photo framing choice
   video.muted = clip.muted;
@@ -394,6 +410,7 @@ async function showTextScreen(
   const { imgA, imgB, textOverlay, textOverlayTitle, textOverlaySubtitle } = refs;
   imgA.classList.remove('visible');
   imgB.classList.remove('visible');
+  setCaption(); // no photo caption over intro/outro/section cards
   textOverlayTitle.textContent = title;
   textOverlaySubtitle.textContent = subtitle || '';
   // Apply italic styling based on active template
@@ -439,6 +456,7 @@ async function crossfadeToPhoto(
   applyLiveKenBurns(incoming, photo, (transSec + holdSec) * 1000);
   incoming.classList.add('visible');
   outgoing.classList.remove('visible');
+  setCaption(photo.caption); // fades in with the photo; clears if it has none
   await sleep(transSec * 1000);
   currentImg = incoming;
   nextImg = outgoing;
@@ -448,6 +466,7 @@ async function fadeImagesOut(durationSec: number): Promise<void> {
   if (!refs) return;
   refs.imgA.classList.remove('visible');
   refs.imgB.classList.remove('visible');
+  setCaption(); // fade any caption out alongside the image
   await sleep(durationSec * 1000);
 }
 

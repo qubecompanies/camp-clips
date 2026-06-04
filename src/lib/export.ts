@@ -139,6 +139,61 @@ function drawAnimatedTitle(
   ctx.restore();
 }
 
+// Trace a rounded-rectangle path (no reliance on the newer ctx.roundRect, which
+// isn't universally available across the browsers we target).
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+// Draw a photo caption as a bottom-centered pill (dark scrim + white text) so it
+// stays legible over any photo. Scrim + white text means it reads without relying
+// on color (deuteranopia-safe). `alpha` lets callers fade it in/out in lockstep
+// with the photo's own crossfade. Font auto-shrinks to fit the frame width.
+function drawCaption(ctx: CanvasRenderingContext2D, W: number, H: number, text: string, alpha: number): void {
+  const caption = text.trim();
+  if (!caption || alpha <= 0) return;
+  const sx = Math.min(W, H) / 1080;
+  const maxTextWidth = W * 0.82;
+  let fontSize = Math.round(34 * sx);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `500 ${fontSize}px Inter, sans-serif`;
+  let tw = ctx.measureText(caption).width;
+  while (tw > maxTextWidth && fontSize > Math.round(16 * sx)) {
+    fontSize -= 1;
+    ctx.font = `500 ${fontSize}px Inter, sans-serif`;
+    tw = ctx.measureText(caption).width;
+  }
+  const padX = Math.round(fontSize * 0.7);
+  const padY = Math.round(fontSize * 0.42);
+  const pillW = tw + padX * 2;
+  const pillH = fontSize + padY * 2;
+  const cx = W / 2;
+  const cy = H - Math.round(H * 0.07) - pillH / 2;
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  roundRectPath(ctx, cx - pillW / 2, cy - pillH / 2, pillW, pillH, pillH / 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(caption, cx, cy + 1);
+  ctx.restore();
+}
+
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -180,6 +235,7 @@ async function renderFadeInKB(
   t1: number,
   duration: number,
   onTick: () => void,
+  caption?: string,
 ): Promise<void> {
   const fps = 30;
   const total = Math.max(1, Math.round(duration * fps));
@@ -189,6 +245,7 @@ async function renderFadeInKB(
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
     drawKB(ctx, W, H, img, plan, t0 + (t1 - t0) * prog, prog);
+    if (caption) drawCaption(ctx, W, H, caption, prog); // fade caption in with the photo
     onTick && onTick();
     await sleep(1000 / fps);
   }
@@ -202,14 +259,17 @@ async function renderFadeOutKB(
   plan: KbPlan | null,
   t: number,
   duration: number,
+  caption?: string,
 ): Promise<void> {
   const fps = 30;
   const total = Math.max(1, Math.round(duration * fps));
   for (let f = 0; f < total; f++) {
     if (_cancelled) return;
+    const fade = 1 - f / total;
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
-    drawKB(ctx, W, H, img, plan, t, 1 - f / total);
+    drawKB(ctx, W, H, img, plan, t, fade);
+    if (caption) drawCaption(ctx, W, H, caption, fade); // fade caption out with the photo
     await sleep(1000 / fps);
   }
 }
@@ -227,6 +287,8 @@ async function renderCrossfadeKB(
   tB1: number,
   duration: number,
   onTick: () => void,
+  captionA?: string,
+  captionB?: string,
 ): Promise<void> {
   const fps = 30;
   const total = Math.max(1, Math.round(duration * fps));
@@ -236,7 +298,9 @@ async function renderCrossfadeKB(
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
     drawKB(ctx, W, H, imgA, planA, tA, 1 - prog); // outgoing
+    if (captionA) drawCaption(ctx, W, H, captionA, 1 - prog);
     drawKB(ctx, W, H, imgB, planB, tB0 + (tB1 - tB0) * prog, prog); // incoming
+    if (captionB) drawCaption(ctx, W, H, captionB, prog);
     onTick && onTick();
     await sleep(1000 / fps);
   }
@@ -252,6 +316,7 @@ async function renderHoldKB(
   t1: number,
   duration: number,
   onTick: () => void,
+  caption?: string,
 ): Promise<void> {
   if (duration <= 0) return;
   const fps = 30;
@@ -262,6 +327,7 @@ async function renderHoldKB(
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
     drawKB(ctx, W, H, img, plan, t0 + (t1 - t0) * prog, 1);
+    if (caption) drawCaption(ctx, W, H, caption, 1); // caption held fully on during the hold
     onTick && onTick();
     await sleep(1000 / fps);
   }
@@ -609,6 +675,7 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   const fit: 'cover' | 'contain' = settings.photoFit === 'cover' ? 'cover' : 'contain';
   let prevPlan: KbPlan | null = null;
   let prevImg: HTMLImageElement | null = null;
+  let prevCaption: string | undefined;
   let prevWasClip = false;
   let firstItem = true;
   for (let i = 0; i < list.length && !_cancelled; i++) {
@@ -616,12 +683,13 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     if (item.kind === 'clip') {
       // Cleanly close out a preceding photo so we don't jump-cut into the clip.
       if (prevImg && !prevWasClip) {
-        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration);
+        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration, prevCaption);
       }
       await renderClip(ctx, W, H, item, settings.transitionDuration, fit, tick, clipAudioBus);
       prevWasClip = true;
       prevImg = null;
       prevPlan = null;
+      prevCaption = undefined;
       firstItem = false;
       continue;
     }
@@ -629,13 +697,14 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     // Photo
     const img = imageCache.get(item.url)!;
     const plan = ensureKbPlan(item, img.width, img.height);
+    const caption = item.caption;
     const card = cards.get(item.id);
     if (card) {
       // Fade the previous photo out, render the section card, then fade this
       // photo in from black (so the card reads as a clean chapter break).
-      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8);
+      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, prevCaption);
       await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, tick, { titleStyle });
-      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick);
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick, caption);
     } else if (!firstItem && prevImg && !prevWasClip) {
       await renderCrossfadeKB(
         ctx,
@@ -650,15 +719,18 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
         transFrac, // incoming photo starts its motion
         settings.transitionDuration,
         tick,
+        prevCaption,
+        caption,
       );
     } else {
       // First item overall, or the first photo coming out of a clip → fade in.
-      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick);
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick, caption);
     }
     // hold: continue this photo's motion from transFrac to 1.0
-    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, tick);
+    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, tick, caption);
     prevPlan = plan;
     prevImg = img;
+    prevCaption = caption;
     prevWasClip = false;
     firstItem = false;
   }
@@ -667,7 +739,7 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   if (outro.title && !_cancelled) {
     // If the last visible item was a photo, fade it out first; coming out of a
     // clip we're already on black, so go straight to the title.
-    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8);
+    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, prevCaption);
     await renderTextFrames(ctx, W, H, outro.title, outro.subtitle, outro.duration, tick, { titleStyle });
   }
 
