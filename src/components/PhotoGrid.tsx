@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Sortable from 'sortablejs';
 import { useStore } from '../state/store';
 import { isImageFile, isAudioFile, isVideoFile, fmtTime } from '../lib/utils';
@@ -48,6 +48,10 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
   const shuffleMedia = useStore((s) => s.shuffleMedia);
   const sortByDate = useStore((s) => s.sortByDate);
   const reorderMedia = useStore((s) => s.reorderMedia);
+  const scanPhotos = useStore((s) => s.scanPhotos);
+  const excludeFlagged = useStore((s) => s.excludeFlagged);
+  const clearScanFlags = useStore((s) => s.clearScanFlags);
+  const [scanning, setScanning] = useState(false);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const sortableRef = useRef<Sortable | null>(null);
@@ -85,7 +89,19 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
   }, [reorderMedia]);
 
   const included = media.filter((m) => m.included).length;
+  const photoCount = media.filter((m) => m.kind === 'photo' && !m.loadError).length;
+  const flaggedCount = media.filter((m) => m.kind === 'photo' && (m.blurry || m.duplicate)).length;
   const sectionByPhoto = new Map(sections.map((s) => [s.beforePhotoId, s]));
+
+  const handleScan = async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      await scanPhotos();
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleClear = () => {
     if (!media.length) return;
@@ -172,6 +188,40 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
           </svg>
           Shuffle
         </button>
+        {photoCount >= 2 && (
+          <button
+            className="btn"
+            title="Scan on your device for likely-blurry and near-duplicate photos"
+            onClick={handleScan}
+            disabled={scanning}
+          >
+            <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z" />
+              <path d="M19 14l.7 1.9L21.5 17l-1.8.7L19 19l-.7-1.3L16.5 17l1.8-1.1z" />
+            </svg>
+            {scanning ? 'Scanning…' : 'Find Best Shots'}
+          </button>
+        )}
+        {flaggedCount > 0 && (
+          <>
+            <button
+              className="btn btn-flagged"
+              title="Exclude every flagged photo (reversible — click a tile to add it back)"
+              onClick={excludeFlagged}
+            >
+              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14" />
+              </svg>
+              Exclude Flagged ({flaggedCount})
+            </button>
+            <button className="btn btn-icon" title="Clear scan flags" onClick={clearScanFlags}>
+              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </>
+        )}
         <button className="btn" onClick={handleClear}>
           Clear All
         </button>
@@ -475,6 +525,25 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                   </div>
                 </div>
                 <span className="photo-index">{index}</span>
+                {(photo.blurry || photo.duplicate) && (
+                  <span
+                    className="photo-flag-badge"
+                    title={
+                      photo.blurry && photo.duplicate
+                        ? 'Flagged: likely blurry and a near-duplicate'
+                        : photo.blurry
+                          ? 'Flagged: likely blurry'
+                          : 'Flagged: near-duplicate of a sharper shot'
+                    }
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    {photo.blurry && photo.duplicate ? 'Blurry · Dup' : photo.blurry ? 'Blurry' : 'Duplicate'}
+                  </span>
+                )}
                 {photo.caption && !photo.loadError && (
                   <span
                     className="photo-caption-chip"

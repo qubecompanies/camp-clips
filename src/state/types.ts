@@ -37,6 +37,9 @@ export interface Photo {
   face?: FaceFraming | null; // null = detection ran and found nothing; undefined = not yet run
   capturedAt?: number; // EXIF DateTimeOriginal (epoch ms); undefined when unreadable
   caption?: string; // optional text overlay shown on this photo in playback + export
+  // Smart-selection flags, set by the photo-analysis scan (cleared on re-scan).
+  blurry?: boolean; // likely soft/out-of-focus relative to the rest of the set
+  duplicate?: boolean; // a near-duplicate of a sharper sibling (safe to drop)
 }
 
 // Lifecycle of a video clip from drop to playable.

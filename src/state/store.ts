@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Photo, Clip, MediaItem, Song, Settings, TextScreen, PlaybackState, SectionCard, LibraryTrack } from './types';
 import { processImageFile, rotateImage } from '../lib/imageProcessing';
+import { analyzePhoto, findDuplicateIds, type PhotoAnalysis } from '../lib/photoAnalysis';
 import { ingestVideo, convertToH264, extractStillFrame } from '../lib/videoIngest';
 import { partitionLivePhotos } from '../lib/livePhotos';
 import { readCaptureTime } from '../lib/exif';
@@ -62,6 +63,10 @@ export interface AppState {
   setClipMuted: (id: string, muted: boolean) => void;
   rotatePhoto: (id: string, quarterTurns: number) => Promise<void>;
   setPhotoCaption: (id: string, caption: string) => void;
+  // smart selection (blur + near-duplicate)
+  scanPhotos: () => Promise<void>;
+  excludeFlagged: () => void;
+  clearScanFlags: () => void;
   addSongs: (fileList: FileList | File[]) => Promise<void>;
   addBuiltInTrack: (track: LibraryTrack) => Promise<void>;
   removeMedia: (id: string) => void;
@@ -464,6 +469,88 @@ export const useStore = create<AppState>((set, get) => ({
       media: s.media.map((m) =>
         m.id === id && m.kind === 'photo' ? { ...m, caption: caption.trim() ? caption : undefined } : m,
       ),
+    })),
+
+  // ===== Smart selection: flag likely-blurry + near-duplicate photos =====
+  // Runs entirely on-device over the downscaled photo URLs (see photoAnalysis.ts).
+  // Sets `blurry`/`duplicate` flags but never removes or even excludes anything —
+  // the user reviews the flags and decides (excludeFlagged / manual toggle). This
+  // respects the standing "don't delete without being told" rule.
+  scanPhotos: async () => {
+    const photos = get().media.filter((m): m is Photo => m.kind === 'photo' && !m.loadError);
+    if (photos.length < 2) {
+      toast('Add at least two photos to scan for blurry or duplicate shots.', 'info');
+      return;
+    }
+    toast(`Scanning ${photos.length} photo${photos.length === 1 ? '' : 's'} for blurry & duplicate shots…`, 'info');
+
+    const results = new Map<string, PhotoAnalysis>();
+    for (const p of photos) {
+      const a = await analyzePhoto(p.url);
+      if (a) results.set(p.id, a);
+      // Yield so a big set doesn't lock the UI / spike memory.
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    if (!results.size) {
+      toast("Couldn't analyze these photos.", 'error');
+      return;
+    }
+
+    // Blur is judged RELATIVE to this set's own median sharpness, so it adapts to
+    // the camera/lighting instead of relying on a brittle absolute threshold. We
+    // only flag clear outliers (well below the typical shot).
+    const scores = [...results.values()].map((r) => r.blurScore).sort((a, b) => a - b);
+    const median = scores[Math.floor(scores.length / 2)] || 0;
+    const blurThreshold = median * 0.3;
+
+    const duplicateIds = findDuplicateIds(results);
+
+    let blurCount = 0;
+    let dupCount = 0;
+    set((s) => ({
+      media: s.media.map((m) => {
+        if (m.kind !== 'photo') return m;
+        const a = results.get(m.id);
+        if (!a) return { ...m, blurry: false, duplicate: false };
+        const blurry = a.blurScore < blurThreshold;
+        const duplicate = duplicateIds.has(m.id);
+        if (blurry) blurCount++;
+        if (duplicate) dupCount++;
+        return { ...m, blurry, duplicate };
+      }),
+    }));
+
+    if (!blurCount && !dupCount) {
+      toast('Scan complete — no blurry or duplicate shots stood out. Nice set.', 'success');
+    } else {
+      const parts: string[] = [];
+      if (blurCount) parts.push(`${blurCount} likely blurry`);
+      if (dupCount) parts.push(`${dupCount} near-duplicate`);
+      toast(`Flagged ${parts.join(' and ')}. Review the marks, then "Exclude flagged" or toggle individually.`, 'info');
+    }
+  },
+
+  // Exclude (don't delete) every flagged photo in one tap. Reversible — the user
+  // can click any tile to re-include it.
+  excludeFlagged: () => {
+    let count = 0;
+    set((s) => ({
+      media: s.media.map((m) => {
+        if (m.kind === 'photo' && (m.blurry || m.duplicate) && m.included) {
+          count++;
+          return { ...m, included: false };
+        }
+        return m;
+      }),
+    }));
+    if (count) toast(`Excluded ${count} flagged photo${count === 1 ? '' : 's'} from the show. Click any to add it back.`, 'success');
+    else toast('No flagged photos to exclude.', 'info');
+  },
+
+  // Clear all scan flags (e.g. to start a fresh review).
+  clearScanFlags: () =>
+    set((s) => ({
+      media: s.media.map((m) => (m.kind === 'photo' ? { ...m, blurry: false, duplicate: false } : m)),
     })),
 
   // Rotate a photo by N quarter-turns, baking the result into a fresh downscaled
