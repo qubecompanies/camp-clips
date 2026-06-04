@@ -193,15 +193,36 @@ export const useStore = create<AppState>((set, get) => ({
       } catch (err) {
         console.error('Failed to process', file.name, err);
         failed++;
+        // Don't silently drop it — surface the failure as a visible, removable
+        // tile so the user knows exactly which file didn't load (the grid renders
+        // a loadError placeholder). Keep the ORIGINAL filename (e.g. .heic) so the
+        // error hint can be format-aware. Excluded, zero-dimension, no url — it
+        // never reaches playback or export.
+        const placeholder: Photo = {
+          id: uid(),
+          kind: 'photo',
+          name: file.name,
+          url: '',
+          revocable: false,
+          width: 0,
+          height: 0,
+          included: false,
+          loadError: true,
+        };
+        set((s) => ({ media: [...s.media, placeholder] }));
+        await new Promise((r) => setTimeout(r, 0));
       }
     }
 
     if (added > 0 && failed === 0) {
       toast(`Added ${added} photo${added === 1 ? '' : 's'}.`, 'success');
     } else if (added > 0 && failed > 0) {
-      toast(`Added ${added} photos; ${failed} couldn't load.`, 'info');
+      toast(`Added ${added} photo${added === 1 ? '' : 's'}; ${failed} flagged as unreadable in the grid.`, 'info');
     } else if (failed > 0) {
-      toast(`${failed} photo${failed === 1 ? " couldn't" : "s couldn't"} load. The rest are ready.`, 'error');
+      toast(
+        `${failed} photo${failed === 1 ? " couldn't" : "s couldn't"} load — flagged in the grid so you can remove or replace ${failed === 1 ? 'it' : 'them'}.`,
+        'error',
+      );
     }
 
     if (pairedCount > 0) {

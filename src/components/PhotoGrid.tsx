@@ -468,7 +468,11 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                     <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
                   <div className="photo-error-name">{photo.name}</div>
-                  <div className="photo-error-hint">Can't display this file</div>
+                  <div className="photo-error-hint">
+                    {/\.(heic|heif)$/i.test(photo.name)
+                      ? "iPhone HEIC — couldn't convert here. Open it in Photos and share/export as JPG, then re-add."
+                      : "Can't display this file"}
+                  </div>
                 </div>
                 <span className="photo-index">{index}</span>
                 {section && (
@@ -490,16 +494,18 @@ export function PhotoGrid({ onShowGooglePhotos }: Props) {
                       </svg>
                     </button>
                   )}
-                  <button
-                    className={'photo-action-btn section-btn' + (section ? ' active' : '')}
-                    title={section ? 'Has a section card (edit in Setup)' : 'Add a section card before this photo'}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <line x1="4" y1="7" x2="20" y2="7" />
-                      <line x1="4" y1="12" x2="14" y2="12" />
-                      <line x1="4" y1="17" x2="11" y2="17" />
-                    </svg>
-                  </button>
+                  {!photo.loadError && (
+                    <button
+                      className={'photo-action-btn section-btn' + (section ? ' active' : '')}
+                      title={section ? 'Has a section card (edit in Setup)' : 'Add a section card before this photo'}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="4" y1="7" x2="20" y2="7" />
+                        <line x1="4" y1="12" x2="14" y2="12" />
+                        <line x1="4" y1="17" x2="11" y2="17" />
+                      </svg>
+                    </button>
+                  )}
                   <button className="photo-action-btn remove-btn" title="Remove">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <line x1="18" y1="6" x2="6" y2="18" />
