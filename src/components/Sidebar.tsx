@@ -275,7 +275,7 @@ function MusicPanel() {
             className={'btn music-source-btn' + (view === 'library' ? ' active' : '')}
             onClick={() => setView('library')}
           >
-            Browse Library
+            Find Music
           </button>
         </div>
 
@@ -357,6 +357,10 @@ function MusicLibrary() {
 
   return (
     <div className="music-library">
+      <div className="panel-help" style={{ marginTop: 0 }}>
+        Pick a mood for royalty-free track ideas — preview &amp; download from the source, then add them under{' '}
+        <strong>My Songs</strong>. Already have music you love? Use that instead.
+      </div>
       <div className="mood-tabs">
         {manifest.moods.map((m) => (
           <button
@@ -416,7 +420,8 @@ function MusicLibrary() {
         </div>
       ) : (
         <div className="panel-help" style={{ textAlign: 'center', padding: '20px 0' }}>
-          Tracks for this mood are coming soon. In the meantime, add your own from the “My Songs” tab.
+          Use the browse link below to find royalty-free {mood?.name ? mood.name.toLowerCase() : ''} music, or add your
+          own from the “My Songs” tab.
         </div>
       )}
 
@@ -427,9 +432,10 @@ function MusicLibrary() {
       )}
 
       <div className="panel-help library-license-note">
-        These are suggestions, not bundled audio. <strong>Get track</strong> opens the source to download — drop the
-        file into <code>public/music/</code> to make it addable. Licenses shown are as stated by each source; verify
-        terms before public use.
+        These are hand-picked <strong>royalty-free</strong> suggestions. <strong>Get track</strong> opens the source to
+        preview and download — then add the file from the <strong>My Songs</strong> tab. You can also use music you
+        already own. Each track's license is shown as stated by its source; double-check the terms before sharing your
+        video publicly.
       </div>
     </div>
   );
