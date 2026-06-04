@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Camp Clips — Reviewer Checklist</title>
+<meta name="robots" content="noindex" />
+<meta name="theme-color" content="#F59E0B" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #14181f;
+    --ink-soft: #3a4150;
+    --paper: #fbf7ef;
+    --panel: #ffffff;
+    --border: #e7ded0;
+    --primary: #f59e0b;     /* amber */
+    --primary-deep: #b45309;
+    --secondary: #4338ca;   /* indigo */
+    --teal: #14b8a6;
+    --muted: #8a8478;
+    --radius: 14px;
+    --shadow: 0 14px 40px -18px rgba(20, 24, 31, 0.35);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 40px 22px 80px; }
+
+  /* ---- header ---- */
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+  .brand .mark { width: 40px; height: 40px; flex-shrink: 0; }
+  .brand .name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px; letter-spacing: -0.01em; }
+  .brand .tag {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--primary-deep);
+  }
+  .eyebrow {
+    font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--primary-deep); margin-bottom: 10px;
+  }
+  h1 {
+    font-family: 'Fraunces', serif; font-weight: 600; letter-spacing: -0.03em;
+    font-size: clamp(30px, 6vw, 48px); line-height: 1.05; margin: 0 0 14px;
+  }
+  .lede { font-size: 17px; color: var(--ink-soft); max-width: 60ch; margin: 0 0 22px; }
+
+  /* ---- privacy chip ---- */
+  .privacy {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(20, 184, 166, 0.12); color: #0f766e;
+    border: 1px solid rgba(20, 184, 166, 0.35);
+    padding: 8px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; margin-bottom: 26px;
+  }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; justify-content: center;
+    font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
+    border-radius: 10px; padding: 13px 22px; border: 1.5px solid transparent; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--primary); color: var(--ink); }
+  .btn-primary:hover { background: #e8920a; transform: translateY(-1px); }
+  .btn-ghost { background: var(--panel); border-color: var(--border); color: var(--ink); }
+  .btn-ghost:hover { border-color: var(--primary); }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 34px; }
+
+  /* ---- progress ---- */
+  .progress-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; margin-bottom: 30px; box-shadow: var(--shadow);
+    position: sticky; top: 12px; z-index: 5;
+  }
+  .progress-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .progress-head strong { font-family: 'Fraunces', serif; font-size: 16px; }
+  .progress-count { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--primary-deep); }
+  .progress-track { height: 8px; background: #efe7d8; border-radius: 999px; overflow: hidden; }
+  .progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--primary), var(--teal));
+    border-radius: 999px; transition: width 0.3s ease;
+  }
+  .reset {
+    background: none; border: none; color: var(--muted); font: inherit; font-size: 12.5px;
+    cursor: pointer; text-decoration: underline; padding: 6px 0 0;
+  }
+  .done-banner {
+    display: none; align-items: center; gap: 8px; margin-top: 10px;
+    color: var(--primary-deep); font-weight: 600; font-size: 14px;
+  }
+  .progress-card.complete .done-banner { display: flex; }
+
+  /* ---- checklist sections ---- */
+  section.group { margin-bottom: 26px; }
+  section.group > h2 {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; letter-spacing: -0.01em;
+    margin: 0 0 4px; display: flex; align-items: center; gap: 10px;
+  }
+  section.group > h2 .num {
+    width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px;
+    background: var(--ink); color: #fff; font-size: 13px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;
+  }
+  section.group > p.hint { color: var(--muted); font-size: 14px; margin: 0 0 12px 36px; }
+
+  ul.tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  li.task { }
+  li.task label {
+    display: flex; align-items: flex-start; gap: 12px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 13px 15px; transition: border-color 0.15s, background 0.15s;
+  }
+  li.task label:hover { border-color: var(--primary); }
+  li.task input { position: absolute; opacity: 0; width: 0; height: 0; }
+  /* custom box — checkmark glyph carries the state, not color alone */
+  .box {
+    flex-shrink: 0; width: 24px; height: 24px; border-radius: 7px;
+    border: 2px solid var(--border); background: #fff; margin-top: 1px;
+    display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .box svg { width: 15px; height: 15px; stroke: #fff; stroke-width: 3.5; fill: none; opacity: 0; transition: opacity 0.12s; }
+  .task-text { font-size: 15px; }
+  .task-text .t-sub { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  /* checked state: amber fill + checkmark + struck label */
+  input:checked + .box { background: var(--primary); border-color: var(--primary); }
+  input:checked + .box svg { opacity: 1; }
+  input:checked ~ .task-text { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(180,83,9,0.5); }
+  input:focus-visible + .box { outline: 3px solid rgba(245, 158, 11, 0.4); outline-offset: 2px; }
+
+  /* ---- caveats ---- */
+  .callout {
+    background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: var(--radius); padding: 16px 18px; margin: 30px 0;
+  }
+  .callout h3 { margin: 0 0 8px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .callout ul { margin: 0; padding-left: 20px; font-size: 14.5px; color: var(--ink-soft); }
+  .callout li { margin-bottom: 5px; }
+
+  /* ---- feedback ---- */
+  .feedback {
+    background: var(--ink); color: #fff; border-radius: var(--radius);
+    padding: 26px 24px; margin-top: 34px; text-align: center;
+  }
+  .feedback h2 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 24px; margin: 0 0 8px; }
+  .feedback p { color: rgba(255,255,255,0.75); margin: 0 auto 18px; max-width: 48ch; font-size: 15px; }
+  .feedback .qs { text-align: left; max-width: 44ch; margin: 0 auto 22px; padding-left: 20px; font-size: 14px; color: rgba(255,255,255,0.85); }
+  .feedback .qs li { margin-bottom: 5px; }
+  .btn-feedback { background: var(--primary); color: var(--ink); font-size: 16px; padding: 14px 28px; }
+  .btn-feedback:hover { background: #ffb12e; }
+
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+  footer a { color: var(--primary-deep); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="14" fill="#F59E0B" />
+        <circle cx="32" cy="32" r="22" fill="none" stroke="#14181F" stroke-width="3" />
+        <path d="M32 12 A20 20 0 0 0 12 32 L22 32 A10 10 0 0 1 32 22 Z" fill="#4338CA" />
+        <path d="M12 32 A20 20 0 0 0 32 52 L32 42 A10 10 0 0 1 22 32 Z" fill="#14181F" />
+        <path d="M32 52 A20 20 0 0 0 52 32 L42 32 A10 10 0 0 1 32 42 Z" fill="#FFFFFF" />
+        <circle cx="32" cy="32" r="5" fill="#F59E0B" />
+      </svg>
+    </div>
+    <div>
+      <div class="name">Camp Clips</div>
+      <div class="tag">Reviewer Checklist</div>
+    </div>
+  </div>
+
+  <div class="eyebrow">Thanks for taking a look</div>
+  <h1>Give Camp Clips a 10-minute test drive.</h1>
+  <p class="lede">
+    Camp Clips turns a folder of photos and a song or two into a slideshow you can play on a projector or save as a
+    video — built for Stake camps, ward events, and family reunions. Work through the checklist below; it remembers
+    your progress on this device.
+  </p>
+
+  <div class="privacy">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+    Your photos never upload — everything happens in your browser.
+  </div>
+
+  <div class="cta-row">
+    <a class="btn btn-primary" href="/app" target="_blank" rel="noopener">
+      Open Camp Clips
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+    </a>
+    <a class="btn btn-ghost" href="#feedback">Jump to feedback</a>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-card" id="progressCard">
+    <div class="progress-head">
+      <strong>Your progress</strong>
+      <span class="progress-count"><span id="doneCount">0</span> / <span id="totalCount">0</span></span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="done-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+      All done — thank you! Don't forget to send your feedback below.
+    </div>
+    <button class="reset" id="resetBtn" type="button">Reset checklist</button>
+  </div>
+
+  <!-- CHECKLIST -->
+  <div id="checklist"></div>
+
+  <!-- CAVEATS -->
+  <div class="callout">
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+      Two things to expect
+    </h3>
+    <ul>
+      <li><strong>Exporting takes about as long as the slideshow runs</strong> (a 5-minute show ≈ 5 minutes to save). That's normal — keep the tab open and your screen awake.</li>
+      <li>It works great on a <strong>computer</strong>, and also runs on an <strong>iPhone or iPad</strong> if you'd like to try it there too.</li>
+    </ul>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div class="feedback" id="feedback">
+    <h2>How did it go?</h2>
+    <p>Your honest reaction is the whole point — even "this confused me" is gold.</p>
+    <ul class="qs">
+      <li>Did anything confuse you or feel harder than it should?</li>
+      <li>Did anything break or not work as expected?</li>
+      <li>Would you actually use this for a ward or stake event?</li>
+      <li>What's the one thing you'd add or change?</li>
+    </ul>
+    <a class="btn btn-feedback" id="feedbackBtn" href="#">Send feedback</a>
+  </div>
+
+  <footer>
+    A Qube Companies product · <a href="/">campclips.qubecompanies.com</a>
+  </footer>
+
+</div>
+
+<script>
+  // ---- Checklist data ----
+  var GROUPS = [
+    {
+      title: 'Get set up',
+      hint: 'Two minutes to a slideshow.',
+      tasks: [
+        { id: 'open', text: 'Open Camp Clips', sub: 'Click "Open Camp Clips" above, then the big "Open Camp Clips" button.' },
+        { id: 'photos', text: 'Add a folder of photos', sub: 'Drag them in or use the Photos / Folder buttons. 20–50 is plenty to start.' },
+        { id: 'music', text: 'Add a song', sub: 'Use "My Songs" for your own music, or "Find Music" for free suggestions.' },
+        { id: 'name', text: 'Give it a title', sub: 'Type an event name up top, e.g. "Stake Youth Camp 2026".' }
+      ]
+    },
+    {
+      title: 'Watch it',
+      hint: 'See the show come together.',
+      tasks: [
+        { id: 'play', text: 'Press Play', sub: 'It runs full-screen, the way it would on a projector. Press Esc to exit.' },
+        { id: 'export', text: 'Export a video and watch the file', sub: 'Save it, then open the downloaded video to confirm it looks right. (This is the big one.)' }
+      ]
+    },
+    {
+      title: 'Try the extras',
+      hint: 'Optional, but this is where it gets fun.',
+      tasks: [
+        { id: 'caption', text: 'Add a caption to a photo', sub: 'Hover a photo, click the pencil, type a caption — watch it appear on that slide.' },
+        { id: 'bestshots', text: 'Try "Find Best Shots"', sub: 'It flags likely-blurry and duplicate photos so you can cull a big batch fast.' },
+        { id: 'section', text: 'Add a section title card', sub: 'Use the list icon on a photo to drop a "Day Two"-style title between groups.' },
+        { id: 'phone', text: 'Open it once on your phone', sub: 'Optional — but it tells me a lot about how it holds up on iPhone/iPad.' }
+      ]
+    }
+  ];
+
+  var STORAGE_KEY = 'campclips:review:v1';
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { state = {}; }
+
+  var checkSvg = '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>';
+  var container = document.getElementById('checklist');
+  var total = 0;
+
+  GROUPS.forEach(function (g, gi) {
+    var sec = document.createElement('section');
+    sec.className = 'group';
+    var h = '<h2><span class="num">' + (gi + 1) + '</span>' + g.title + '</h2>';
+    if (g.hint) h += '<p class="hint">' + g.hint + '</p>';
+    h += '<ul class="tasks">';
+    g.tasks.forEach(function (t) {
+      total++;
+      var checked = state[t.id] ? ' checked' : '';
+      h += '<li class="task"><label>' +
+        '<input type="checkbox" data-id="' + t.id + '"' + checked + ' />' +
+        '<span class="box">' + checkSvg + '</span>' +
+        '<span class="task-text">' + t.text +
+        (t.sub ? '<span class="t-sub">' + t.sub + '</span>' : '') +
+        '</span></label></li>';
+    });
+    h += '</ul>';
+    sec.innerHTML = h;
+    container.appendChild(sec);
+  });
+
+  document.getElementById('totalCount').textContent = total;
+
+  function refresh() {
+    var done = 0;
+    Object.keys(state).forEach(function (k) { if (state[k]) done++; });
+    document.getElementById('doneCount').textContent = done;
+    document.getElementById('progressFill').style.width = total ? (done / total * 100) + '%' : '0%';
+    document.getElementById('progressCard').classList.toggle('complete', done >= total && total > 0);
+  }
+
+  container.addEventListener('change', function (e) {
+    var box = e.target;
+    if (box && box.matches('input[type="checkbox"]')) {
+      state[box.getAttribute('data-id')] = box.checked;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+      refresh();
+    }
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    state = {};
+    try { localStorage.removeItem(STORAGE_KEY); } catch (err) {}
+    container.querySelectorAll('input[type="checkbox"]').forEach(function (c) { c.checked = false; });
+    refresh();
+  });
+
+  refresh();
+
+  // ---- Feedback link ----
+  // Set the destination here. Default is a mailto; swap for a Google Form URL if
+  // you'd rather collect responses in a sheet (then this whole block can just be
+  // feedbackBtn.href = 'https://...').
+  var FEEDBACK_EMAIL = 'qubecompanies@gmail.com';
+  var btn = document.getElementById('feedbackBtn');
+  if (FEEDBACK_EMAIL.indexOf('__') === -1 && FEEDBACK_EMAIL.indexOf('@') !== -1) {
+    var subject = encodeURIComponent('Camp Clips feedback');
+    var body = encodeURIComponent(
+      'What I tried:\n\n' +
+      'What confused me or felt off:\n\n' +
+      'Anything that broke:\n\n' +
+      'Would I use this for a ward/stake event? \n\n' +
+      'One thing I\'d add or change:\n'
+    );
+    btn.href = 'mailto:' + FEEDBACK_EMAIL + '?subject=' + subject + '&body=' + body;
+  } else {
+    // No destination wired yet — keep the page usable, just disable the button.
+    btn.textContent = 'Feedback link coming soon';
+    btn.style.opacity = '0.6';
+    btn.style.pointerEvents = 'none';
+  }
+</script>
+</body>
+</html>
