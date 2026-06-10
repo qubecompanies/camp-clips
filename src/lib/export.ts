@@ -4,6 +4,8 @@ import { ensureKbPlan, drawKB } from './kenBurns';
 import { TEMPLATES } from './templates';
 import { sleep, fmtTime, easeInOut } from './utils';
 import { acquireWakeLock, releaseWakeLock } from './wakeLock';
+import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from 'mp4-muxer';
+import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from 'webm-muxer';
 import { toast } from '../state/toastStore';
 import type { KbPlan, ExportAspect, ExportRes, Photo, Clip } from '../state/types';
 
@@ -54,8 +56,12 @@ let _recorder: MediaRecorder | null = null;
 let _cancelled = false;
 
 export function cancelExport(): void {
+  // Flag cancellation for both engines. The MediaRecorder path also needs its
+  // recorder stopped; the WebCodecs path's render/encode loops watch _cancelled.
+  // Both engines reset _cancelled = false at their start, so flagging here can't
+  // poison a later export.
+  _cancelled = true;
   if (_recorder && _recorder.state === 'recording') {
-    _cancelled = true;
     _recorder.stop();
   }
 }
@@ -511,9 +517,91 @@ async function renderClip(
   video.load();
 }
 
+// Shared render walk used by BOTH export engines. Draws intro → items → outro to
+// the canvas, calling emit() once per frame. The only thing that differs between
+// the MediaRecorder and WebCodecs engines is what emit() does with each frame
+// (sleep+capture vs encode) — the drawing is identical, so it lives here once.
+interface TimelineParams {
+  ctx: CanvasRenderingContext2D;
+  W: number;
+  H: number;
+  list: (Photo | Clip)[];
+  cards: Map<string, { title: string; subtitle: string; duration: number }>;
+  imageCache: Map<string, HTMLImageElement>;
+  intro: { title: string; subtitle: string; duration: number };
+  outro: { title: string; subtitle: string; duration: number };
+  transitionDuration: number;
+  photoFit: 'cover' | 'contain';
+  effHold: number;
+  titleStyle: 'roman' | 'italic';
+  clipAudioBus?: ClipAudioBus;
+  emit: FrameEmitter;
+}
+
+async function renderTimeline(p: TimelineParams): Promise<void> {
+  const { ctx, W, H, list, cards, imageCache, intro, outro, titleStyle, emit } = p;
+  const transitionDuration = p.transitionDuration;
+  const effHold = p.effHold;
+
+  // Intro
+  if (intro.title && !_cancelled) {
+    await renderTextFrames(ctx, W, H, intro.title, intro.subtitle, intro.duration, emit, { titleStyle });
+  }
+
+  const transFrac = transitionDuration / (transitionDuration + effHold);
+  const fit: 'cover' | 'contain' = p.photoFit === 'cover' ? 'cover' : 'contain';
+  let prevPlan: KbPlan | null = null;
+  let prevImg: HTMLImageElement | null = null;
+  let prevCaption: string | undefined;
+  let prevWasClip = false;
+  let firstItem = true;
+  for (let i = 0; i < list.length && !_cancelled; i++) {
+    const item = list[i];
+    if (item.kind === 'clip') {
+      if (prevImg && !prevWasClip) {
+        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, transitionDuration, emit, prevCaption);
+      }
+      await renderClip(ctx, W, H, item, transitionDuration, fit, emit, p.clipAudioBus);
+      prevWasClip = true;
+      prevImg = null;
+      prevPlan = null;
+      prevCaption = undefined;
+      firstItem = false;
+      continue;
+    }
+
+    const img = imageCache.get(item.url)!;
+    const plan = ensureKbPlan(item, img.width, img.height);
+    const caption = item.caption;
+    const card = cards.get(item.id);
+    if (card) {
+      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, emit, prevCaption);
+      await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, emit, { titleStyle });
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, transitionDuration, emit, caption);
+    } else if (!firstItem && prevImg && !prevWasClip) {
+      await renderCrossfadeKB(ctx, W, H, prevImg, prevPlan, 1.0, img, plan, 0, transFrac, transitionDuration, emit, prevCaption, caption);
+    } else {
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, transitionDuration, emit, caption);
+    }
+    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, emit, caption);
+    prevPlan = plan;
+    prevImg = img;
+    prevCaption = caption;
+    prevWasClip = false;
+    firstItem = false;
+  }
+
+  // Outro
+  if (outro.title && !_cancelled) {
+    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, emit, prevCaption);
+    await renderTextFrames(ctx, W, H, outro.title, outro.subtitle, outro.duration, emit, { titleStyle });
+  }
+}
+
 export type ExportProgress = (pct: number, text: string) => void;
 
-export async function doExport(onProgress: ExportProgress): Promise<'done' | 'cancelled'> {
+// ===== Engine 1: MediaRecorder (real-time capture) — the universal fallback =====
+async function doExportMediaRecorder(onProgress: ExportProgress): Promise<'done' | 'cancelled'> {
   const { settings, intro, outro, eventName } = useStore.getState();
   onProgress(0, 'Preparing canvas…');
   // Keep the screen awake for the whole render so a sleeping display can't stall
@@ -680,86 +768,25 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     await sleep(1000 / FPS);
   };
 
-  // Intro
-  if (intro.title && !_cancelled) {
-    await renderTextFrames(ctx, W, H, intro.title, intro.subtitle, intro.duration, emit, { titleStyle });
-  }
-
-  // Walk the unified media list: photos cross-fade with continuous Ken Burns
-  // motion; clips play in real time bracketed by fades to/from black. A clip
-  // breaks the photo crossfade chain, so a photo following a clip fades in from
-  // black rather than crossfading from a frame that's no longer on screen.
-  const transFrac = settings.transitionDuration / (settings.transitionDuration + effHold);
-  const fit: 'cover' | 'contain' = settings.photoFit === 'cover' ? 'cover' : 'contain';
-  let prevPlan: KbPlan | null = null;
-  let prevImg: HTMLImageElement | null = null;
-  let prevCaption: string | undefined;
-  let prevWasClip = false;
-  let firstItem = true;
-  for (let i = 0; i < list.length && !_cancelled; i++) {
-    const item = list[i];
-    if (item.kind === 'clip') {
-      // Cleanly close out a preceding photo so we don't jump-cut into the clip.
-      if (prevImg && !prevWasClip) {
-        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration, emit, prevCaption);
-      }
-      await renderClip(ctx, W, H, item, settings.transitionDuration, fit, emit, clipAudioBus);
-      prevWasClip = true;
-      prevImg = null;
-      prevPlan = null;
-      prevCaption = undefined;
-      firstItem = false;
-      continue;
-    }
-
-    // Photo
-    const img = imageCache.get(item.url)!;
-    const plan = ensureKbPlan(item, img.width, img.height);
-    const caption = item.caption;
-    const card = cards.get(item.id);
-    if (card) {
-      // Fade the previous photo out, render the section card, then fade this
-      // photo in from black (so the card reads as a clean chapter break).
-      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, emit, prevCaption);
-      await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, emit, { titleStyle });
-      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, emit, caption);
-    } else if (!firstItem && prevImg && !prevWasClip) {
-      await renderCrossfadeKB(
-        ctx,
-        W,
-        H,
-        prevImg,
-        prevPlan,
-        1.0, // outgoing photo at end of its motion
-        img,
-        plan,
-        0,
-        transFrac, // incoming photo starts its motion
-        settings.transitionDuration,
-        emit,
-        prevCaption,
-        caption,
-      );
-    } else {
-      // First item overall, or the first photo coming out of a clip → fade in.
-      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, emit, caption);
-    }
-    // hold: continue this photo's motion from transFrac to 1.0
-    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, emit, caption);
-    prevPlan = plan;
-    prevImg = img;
-    prevCaption = caption;
-    prevWasClip = false;
-    firstItem = false;
-  }
-
-  // Outro
-  if (outro.title && !_cancelled) {
-    // If the last visible item was a photo, fade it out first; coming out of a
-    // clip we're already on black, so go straight to the title.
-    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, emit, prevCaption);
-    await renderTextFrames(ctx, W, H, outro.title, outro.subtitle, outro.duration, emit, { titleStyle });
-  }
+  // Walk the unified media list through the shared timeline renderer. The
+  // MediaRecorder engine's emit (above) paces to real time; captureStream picks
+  // up the canvas automatically.
+  await renderTimeline({
+    ctx,
+    W,
+    H,
+    list,
+    cards,
+    imageCache,
+    intro,
+    outro,
+    transitionDuration: settings.transitionDuration,
+    photoFit: settings.photoFit,
+    effHold,
+    titleStyle,
+    clipAudioBus,
+    emit,
+  });
 
   recorder.stop();
   await donePromise;
@@ -785,4 +812,303 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   onProgress(100, 'Done. Video downloaded.');
   toast('Slideshow exported. Check your downloads.', 'success');
   return 'done';
+}
+
+// ===== Engine 2: WebCodecs (offline encode) — fast path for photo shows =====
+// Renders as fast as the CPU allows (not wall-clock) and muxes with mp4-muxer /
+// webm-muxer. Clips are intentionally NOT handled here (their real-time playback
+// + audio belongs on the proven MediaRecorder path), so the dispatcher only
+// routes clip-free shows here. WebCodecs globals are accessed via globalThis with
+// casts so this compiles regardless of the TS lib's (inconsistent) WebCodecs
+// typings; it's feature-detected at runtime and any failure falls back.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function webCodecsAvailable(): boolean {
+  const g = globalThis as any;
+  return (
+    typeof g.VideoEncoder === 'function' &&
+    typeof g.AudioEncoder === 'function' &&
+    typeof g.VideoFrame === 'function' &&
+    typeof g.AudioData === 'function' &&
+    typeof g.OfflineAudioContext === 'function'
+  );
+}
+
+async function pickVideoCodec(
+  fmt: 'mp4' | 'webm',
+  W: number,
+  H: number,
+  bitrate: number,
+  fps: number,
+): Promise<string | null> {
+  const VEnc = (globalThis as any).VideoEncoder;
+  const candidates =
+    fmt === 'mp4'
+      ? ['avc1.640034', 'avc1.640033', 'avc1.640032', 'avc1.64002A', 'avc1.640028', 'avc1.42E01F']
+      : ['vp09.00.51.08', 'vp09.00.41.08', 'vp09.00.31.08', 'vp09.00.10.08'];
+  for (const codec of candidates) {
+    try {
+      const support = await VEnc.isConfigSupported({ codec, width: W, height: H, bitrate, framerate: fps });
+      if (support && support.supported) return codec;
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return null;
+}
+
+async function doExportWebCodecs(onProgress: ExportProgress): Promise<'done' | 'cancelled' | 'unsupported'> {
+  const { settings, intro, outro, eventName } = useStore.getState();
+  const FPS = 30;
+
+  const { list, hold: effHold } = buildPlaybackList();
+  // Photo/title timelines only — bail (to the fallback) if the show has clips.
+  if (list.some((m) => m.kind === 'clip')) return 'unsupported';
+  const photos = list.filter((m): m is Photo => m.kind === 'photo');
+  if (!photos.length) return 'unsupported';
+
+  const [W, H, videoBitsPerSecond] = exportDimensions(settings.exportAspect, settings.exportRes);
+  const fmt: 'mp4' | 'webm' = settings.exportFmt === 'mp4' ? 'mp4' : 'webm';
+  const codecString = await pickVideoCodec(fmt, W, H, videoBitsPerSecond, FPS);
+  if (!codecString) return 'unsupported';
+
+  onProgress(0, 'Preparing fast export…');
+  await acquireWakeLock();
+  _cancelled = false;
+
+  const looped = computePlan().looped;
+  const cards = sectionMap(photos, looped);
+  const sectionTime = sectionTimeForList(photos, looped);
+  const totalDuration =
+    (intro.title ? intro.duration : 0) +
+    photos.length * effHold +
+    Math.max(0, photos.length - 1) * settings.transitionDuration +
+    (outro.title ? outro.duration : 0) +
+    sectionTime;
+  const totalFrames = Math.max(1, Math.round(totalDuration * FPS));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+
+  onProgress(0, 'Loading images…');
+  const imageCache = new Map<string, HTMLImageElement>();
+  for (let i = 0; i < photos.length; i++) {
+    if (!imageCache.has(photos[i].url)) imageCache.set(photos[i].url, await loadImage(photos[i].url));
+  }
+
+  // Decode music for the offline mix.
+  const songs = getIncludedSongs();
+  const decodedSongs: AudioBuffer[] = [];
+  if (songs.length) {
+    const ac = new (window.AudioContext || (window as AnyWindow).webkitAudioContext!)();
+    for (const song of songs) {
+      if (!song.arrayBuffer) continue;
+      try {
+        decodedSongs.push(await ac.decodeAudioData(song.arrayBuffer.slice(0)));
+      } catch (err) {
+        console.warn('Could not decode song for fast export:', song.name, err);
+      }
+    }
+    ac.close();
+  }
+  const hasAudio = decodedSongs.length > 0;
+  const sampleRate = 48000;
+  const channels = 2;
+
+  const target: any = fmt === 'mp4' ? new Mp4Target() : new WebmTarget();
+  const muxer: any =
+    fmt === 'mp4'
+      ? new Mp4Muxer({
+          target,
+          video: { codec: 'avc', width: W, height: H, frameRate: FPS },
+          audio: hasAudio ? { codec: 'aac', numberOfChannels: channels, sampleRate } : undefined,
+          fastStart: 'in-memory',
+          firstTimestampBehavior: 'offset',
+        })
+      : new WebmMuxer({
+          target,
+          video: { codec: 'V_VP9', width: W, height: H, frameRate: FPS },
+          audio: hasAudio ? { codec: 'A_OPUS', numberOfChannels: channels, sampleRate } : undefined,
+          firstTimestampBehavior: 'offset',
+        });
+
+  const VEnc = (globalThis as any).VideoEncoder;
+  const AEnc = (globalThis as any).AudioEncoder;
+  const VFrame = (globalThis as any).VideoFrame;
+  const AData = (globalThis as any).AudioData;
+
+  let encErr: unknown = null;
+  const videoEncoder: any = new VEnc({
+    output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
+    error: (e: unknown) => {
+      encErr = e;
+    },
+  });
+  const vconfig: any = { codec: codecString, width: W, height: H, bitrate: videoBitsPerSecond, framerate: FPS };
+  if (fmt === 'mp4') vconfig.avc = { format: 'avc' }; // mp4-muxer wants AVCC, not Annex-B
+  videoEncoder.configure(vconfig);
+
+  // Per-frame sink: snapshot the canvas as a VideoFrame and encode — no sleep.
+  const microPerFrame = 1e6 / FPS;
+  let frameIndex = 0;
+  const emit: FrameEmitter = async () => {
+    if (encErr) throw encErr;
+    if (_cancelled) return;
+    const frame = new VFrame(canvas, {
+      timestamp: Math.round(frameIndex * microPerFrame),
+      duration: Math.round(microPerFrame),
+    });
+    videoEncoder.encode(frame, { keyFrame: frameIndex % (FPS * 5) === 0 });
+    frame.close();
+    frameIndex++;
+    const pct = Math.min(97, (frameIndex / totalFrames) * 100);
+    onProgress(pct, `Encoding… ${Math.round(pct)}% (fast)`);
+    while (videoEncoder.encodeQueueSize > 8 && !_cancelled) await sleep(4); // backpressure
+  };
+
+  try {
+    const titleStyle = ((TEMPLATES[settings.templateId] || TEMPLATES.default).intro?.titleStyle as 'roman' | 'italic') || 'roman';
+    await renderTimeline({
+      ctx,
+      W,
+      H,
+      list,
+      cards,
+      imageCache,
+      intro,
+      outro,
+      transitionDuration: settings.transitionDuration,
+      photoFit: settings.photoFit,
+      effHold,
+      titleStyle,
+      emit,
+    });
+    if (_cancelled) {
+      try {
+        videoEncoder.close();
+      } catch {
+        /* ignore */
+      }
+      await releaseWakeLock();
+      onProgress(0, 'Export cancelled.');
+      return 'cancelled';
+    }
+    await videoEncoder.flush();
+
+    if (hasAudio) {
+      onProgress(97, 'Mixing audio…');
+      const frameCount = Math.max(1, Math.ceil(totalDuration * sampleRate));
+      const offline = new OfflineAudioContext(channels, frameCount, sampleRate);
+      const gain = offline.createGain();
+      gain.gain.value = settings.musicVolume;
+      gain.connect(offline.destination);
+      let at = 0;
+      let idx = 0;
+      while (at < totalDuration) {
+        const buf = decodedSongs[idx % decodedSongs.length];
+        const src = offline.createBufferSource();
+        src.buffer = buf;
+        src.connect(gain);
+        src.start(at);
+        at += buf.duration;
+        idx++;
+        if (!settings.loopMusic && idx >= decodedSongs.length) break;
+        if (idx > 5000) break; // safety
+      }
+      const mixed = await offline.startRendering();
+
+      const audioEncoder: any = new AEnc({
+        output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
+        error: (e: unknown) => {
+          encErr = e;
+        },
+      });
+      audioEncoder.configure({
+        codec: fmt === 'mp4' ? 'mp4a.40.2' : 'opus',
+        sampleRate,
+        numberOfChannels: channels,
+        bitrate: 128000,
+      });
+      const sliceFrames = 4096;
+      for (let pos = 0; pos < mixed.length && !_cancelled; pos += sliceFrames) {
+        if (encErr) throw encErr;
+        const len = Math.min(sliceFrames, mixed.length - pos);
+        const planar = new Float32Array(len * channels);
+        for (let c = 0; c < channels; c++) {
+          const srcCh = Math.min(c, mixed.numberOfChannels - 1);
+          mixed.copyFromChannel(planar.subarray(c * len, c * len + len), srcCh, pos);
+        }
+        const audioData = new AData({
+          format: 'f32-planar',
+          sampleRate,
+          numberOfFrames: len,
+          numberOfChannels: channels,
+          timestamp: Math.round((pos / sampleRate) * 1e6),
+          data: planar,
+        });
+        audioEncoder.encode(audioData);
+        audioData.close();
+      }
+      await audioEncoder.flush();
+      audioEncoder.close();
+    }
+
+    videoEncoder.close();
+    if (encErr) throw encErr;
+    if (_cancelled) {
+      await releaseWakeLock();
+      onProgress(0, 'Export cancelled.');
+      return 'cancelled';
+    }
+
+    muxer.finalize();
+    const buffer: ArrayBuffer = target.buffer;
+    await releaseWakeLock();
+
+    const blob = new Blob([buffer], { type: fmt === 'mp4' ? 'video/mp4' : 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(eventName.trim() || 'camp-clips').replace(/[^a-z0-9-_]/gi, '_')}.${fmt}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+    onProgress(100, 'Done. Video downloaded.');
+    toast('Slideshow exported (fast). Check your downloads.', 'success');
+    return 'done';
+  } catch (err) {
+    try {
+      videoEncoder.close();
+    } catch {
+      /* ignore */
+    }
+    await releaseWakeLock();
+    throw err; // bubble to the dispatcher, which falls back to MediaRecorder
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ===== Public entry: pick the engine =====
+// `fast` opts into the WebCodecs path; it's used only when available AND the show
+// is clip-free AND a codec config is supported — otherwise (or on any runtime
+// error) we fall back to the proven MediaRecorder path so exports never fail
+// outright. Default export (no opts) is unchanged for everyone.
+export async function doExport(
+  onProgress: ExportProgress,
+  opts?: { fast?: boolean },
+): Promise<'done' | 'cancelled'> {
+  if (opts?.fast && webCodecsAvailable()) {
+    try {
+      const res = await doExportWebCodecs(onProgress);
+      if (res !== 'unsupported') return res;
+      // 'unsupported' → fall through to the standard engine.
+    } catch (err) {
+      console.warn('Fast export failed; using the standard exporter instead.', err);
+      toast('Fast export hit a snag — using the standard exporter instead.', 'info');
+    }
+  }
+  return doExportMediaRecorder(onProgress);
 }

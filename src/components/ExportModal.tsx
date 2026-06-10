@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { useStore } from '../state/store';
-import { doExport, cancelExport } from '../lib/export';
+import { useStore, selectClips } from '../state/store';
+import { doExport, cancelExport, webCodecsAvailable } from '../lib/export';
 import { unlockAudio } from '../lib/audioContext';
 import type { ExportRes, ExportFmt, ExportAspect } from '../state/types';
 import { exportDimensions } from '../lib/export';
+
+// Whether the fast (WebCodecs) export path can even be offered in this browser.
+// Computed once at module load — capability doesn't change within a session.
+const FAST_EXPORT_SUPPORTED = webCodecsAvailable();
 
 interface Props {
   onClose: () => void;
@@ -32,6 +36,11 @@ export function ExportModal({ onClose }: Props) {
   const [rendering, setRendering] = useState(false);
   const [pct, setPct] = useState(0);
   const [statusText, setStatusText] = useState('Preparing…');
+  const [fast, setFast] = useState(false);
+  // Fast export only applies to clip-free shows; with clips we always use the
+  // real-time engine, so don't offer the toggle in that case.
+  const hasClips = selectClips(useStore.getState()).length > 0;
+  const canOfferFast = FAST_EXPORT_SUPPORTED && !hasClips;
 
   const formatNote =
     settings.exportFmt === 'mp4'
@@ -41,10 +50,13 @@ export function ExportModal({ onClose }: Props) {
   const start = async () => {
     setRendering(true);
     unlockAudio(); // ensure AudioContext is unlocked within this gesture for export audio
-    const result = await doExport((p, text) => {
-      setPct(p);
-      setStatusText(text);
-    });
+    const result = await doExport(
+      (p, text) => {
+        setPct(p);
+        setStatusText(text);
+      },
+      { fast: canOfferFast && fast },
+    );
     if (result === 'done') {
       setTimeout(onClose, 2000);
     }
@@ -140,6 +152,22 @@ export function ExportModal({ onClose }: Props) {
             <div className="panel-help" style={{ marginTop: 10 }}>
               {formatNote}
             </div>
+            {canOfferFast && (
+              <label className="fast-export-toggle" style={{ marginTop: 16 }}>
+                <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} />
+                <span className="fast-export-box" aria-hidden>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <span className="fast-export-label">
+                  <strong>⚡ Fast export (beta)</strong>
+                  <span className="panel-help" style={{ margin: 0 }}>
+                    Encodes much faster than real time. New — preview the file before relying on it.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
         )}
         {rendering && (

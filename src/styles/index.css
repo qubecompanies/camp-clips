@@ -1282,6 +1282,38 @@ input[type="range"]::-moz-range-thumb {
   color: var(--primary);
   font-weight: 600;
 }
+/* Fast export (beta) toggle — custom checkbox; checked state is amber fill + a
+   checkmark glyph (reads without color). */
+.fast-export-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.fast-export-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.fast-export-box {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--border-light);
+  background: var(--bg-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  transition: all 0.15s;
+}
+.fast-export-box svg { color: #fff; opacity: 0; transition: opacity 0.12s; }
+.fast-export-toggle input:checked + .fast-export-box { background: var(--primary); border-color: var(--primary); }
+.fast-export-toggle input:checked + .fast-export-box svg { opacity: 1; }
+.fast-export-toggle input:focus-visible + .fast-export-box { outline: 3px solid var(--primary-dim); outline-offset: 2px; }
+.fast-export-label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+
 .export-res-btn, .export-fmt-btn { flex: 1; justify-content: center; padding: 8px 6px; font-size: 12px; }
 .export-res-btn.active, .export-fmt-btn.active {
   background: var(--secondary-dim);
