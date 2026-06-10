@@ -10,6 +10,7 @@ import { trackUrl } from '../lib/musicLibrary';
 import { isImageFile, isAudioFile, isVideoFile, uid, shuffle } from '../lib/utils';
 import { loadPersistedSettings, persistSettings } from '../lib/preferences';
 import { persistAutosave, loadAutosave } from '../lib/autosave';
+import { reportError } from '../lib/telemetry';
 import { toast } from './toastStore';
 
 // Defaults the app falls back to on first run (or when a persisted blob is
@@ -198,6 +199,7 @@ export const useStore = create<AppState>((set, get) => ({
         await new Promise((r) => setTimeout(r, 0));
       } catch (err) {
         console.error('Failed to process', file.name, err);
+        reportError(err, 'addPhotos');
         failed++;
         // Don't silently drop it — surface the failure as a visible, removable
         // tile so the user knows exactly which file didn't load (the grid renders

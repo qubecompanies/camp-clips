@@ -6,6 +6,7 @@ import { sleep, fmtTime, easeInOut } from './utils';
 import { acquireWakeLock, releaseWakeLock } from './wakeLock';
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from 'mp4-muxer';
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from 'webm-muxer';
+import { reportError } from './telemetry';
 import { toast } from '../state/toastStore';
 import type { KbPlan, ExportAspect, ExportRes, Photo, Clip } from '../state/types';
 
@@ -1107,6 +1108,7 @@ export async function doExport(
       // 'unsupported' → fall through to the standard engine.
     } catch (err) {
       console.warn('Fast export failed; using the standard exporter instead.', err);
+      reportError(err, 'export:fast-fallback');
       toast('Fast export hit a snag — using the standard exporter instead.', 'info');
     }
   }

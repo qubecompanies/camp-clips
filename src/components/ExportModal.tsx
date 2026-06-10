@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useStore, selectClips } from '../state/store';
 import { doExport, cancelExport, webCodecsAvailable } from '../lib/export';
 import { unlockAudio } from '../lib/audioContext';
+import { reportError } from '../lib/telemetry';
+import { toast } from '../state/toastStore';
 import type { ExportRes, ExportFmt, ExportAspect } from '../state/types';
 import { exportDimensions } from '../lib/export';
 
@@ -50,15 +52,23 @@ export function ExportModal({ onClose }: Props) {
   const start = async () => {
     setRendering(true);
     unlockAudio(); // ensure AudioContext is unlocked within this gesture for export audio
-    const result = await doExport(
-      (p, text) => {
-        setPct(p);
-        setStatusText(text);
-      },
-      { fast: canOfferFast && fast },
-    );
-    if (result === 'done') {
-      setTimeout(onClose, 2000);
+    try {
+      const result = await doExport(
+        (p, text) => {
+          setPct(p);
+          setStatusText(text);
+        },
+        { fast: canOfferFast && fast },
+      );
+      if (result === 'done') {
+        setTimeout(onClose, 2000);
+      } else {
+        setRendering(false); // cancelled — back to the options
+      }
+    } catch (err) {
+      reportError(err, 'export');
+      toast("Export couldn't finish. Please try again, or pick a different format.", 'error');
+      setRendering(false);
     }
   };
 

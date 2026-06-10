@@ -4,8 +4,12 @@ import App from './App';
 import { useStore } from './state/store';
 import { applyThemeAttr } from './lib/theme';
 import { applyPaletteOverride, TEMPLATES } from './lib/templates';
+import { initTelemetry } from './lib/telemetry';
 import './styles/tokens.css';
 import './styles/index.css';
+
+// Install global error reporting (no-op unless VITE_TELEMETRY_URL is configured).
+initTelemetry();
 
 // Paint the restored preferences before React mounts so there's no flash of the
 // wrong theme/palette. The store already merged persisted settings over the
