@@ -2,12 +2,10 @@ name = "camp-clips-telemetry"
 main = "src/index.js"
 compatibility_date = "2024-11-01"
 
-# ---- Optional: persist reports for 30 days so you can review them later ----
-# 1) Create the namespace:   npx wrangler kv namespace create ERRORS
-# 2) Paste the printed id below and uncomment these three lines:
-# [[kv_namespaces]]
-# binding = "ERRORS"
-# id = "<paste-the-id-here>"
+# ---- Persist reports for 30 days so you can review them later ----
+[[kv_namespaces]]
+binding = "ERRORS"
+id = "813b33dd1b9040a3baa272b6208825df"
 
 # ---- Read-back token (for GET /report?token=...) ----
 # Set it as a secret (never commit it):   npx wrangler secret put READ_TOKEN
