@@ -3,6 +3,7 @@ import { buildPlaybackList, getIncludedSongs, computePlan, sectionMap, sectionTi
 import { ensureKbPlan, drawKB } from './kenBurns';
 import { TEMPLATES } from './templates';
 import { sleep, fmtTime, easeInOut } from './utils';
+import { acquireWakeLock, releaseWakeLock } from './wakeLock';
 import { toast } from '../state/toastStore';
 import type { KbPlan, ExportAspect, ExportRes, Photo, Clip } from '../state/types';
 
@@ -41,6 +42,13 @@ export function exportDimensions(aspect: ExportAspect, res: ExportRes): [number,
 // export matches the preview.
 
 type AnyWindow = Window & { webkitAudioContext?: typeof AudioContext };
+
+// Called once per fully-rendered canvas frame. The MediaRecorder path advances
+// progress and sleeps 1000/fps to pace the real-time captureStream; the (Phase B)
+// WebCodecs path will instead grab the canvas as a VideoFrame and encode it. By
+// routing every render segment through this one hook, both engines share the
+// exact same drawing code — only the per-frame "sink" differs.
+type FrameEmitter = () => Promise<void>;
 
 let _recorder: MediaRecorder | null = null;
 let _cancelled = false;
@@ -210,7 +218,7 @@ async function renderTextFrames(
   title: string,
   subtitle: string,
   duration: number,
-  onTick: () => void,
+  emit: FrameEmitter,
   opts: { titleStyle?: 'roman' | 'italic' },
 ): Promise<void> {
   const fps = 30;
@@ -220,8 +228,7 @@ async function renderTextFrames(
     if (_cancelled) return;
     const t = f / Math.max(1, totalFrames - 1);
     drawAnimatedTitle(ctx, W, H, title, subtitle, t, duration, { titleStyle });
-    onTick && onTick();
-    await sleep(1000 / fps);
+    await emit();
   }
 }
 
@@ -234,7 +241,7 @@ async function renderFadeInKB(
   t0: number,
   t1: number,
   duration: number,
-  onTick: () => void,
+  emit: FrameEmitter,
   caption?: string,
 ): Promise<void> {
   const fps = 30;
@@ -246,8 +253,7 @@ async function renderFadeInKB(
     ctx.fillRect(0, 0, W, H);
     drawKB(ctx, W, H, img, plan, t0 + (t1 - t0) * prog, prog);
     if (caption) drawCaption(ctx, W, H, caption, prog); // fade caption in with the photo
-    onTick && onTick();
-    await sleep(1000 / fps);
+    await emit();
   }
 }
 
@@ -259,6 +265,7 @@ async function renderFadeOutKB(
   plan: KbPlan | null,
   t: number,
   duration: number,
+  emit: FrameEmitter,
   caption?: string,
 ): Promise<void> {
   const fps = 30;
@@ -270,7 +277,7 @@ async function renderFadeOutKB(
     ctx.fillRect(0, 0, W, H);
     drawKB(ctx, W, H, img, plan, t, fade);
     if (caption) drawCaption(ctx, W, H, caption, fade); // fade caption out with the photo
-    await sleep(1000 / fps);
+    await emit();
   }
 }
 
@@ -286,7 +293,7 @@ async function renderCrossfadeKB(
   tB0: number,
   tB1: number,
   duration: number,
-  onTick: () => void,
+  emit: FrameEmitter,
   captionA?: string,
   captionB?: string,
 ): Promise<void> {
@@ -301,8 +308,7 @@ async function renderCrossfadeKB(
     if (captionA) drawCaption(ctx, W, H, captionA, 1 - prog);
     drawKB(ctx, W, H, imgB, planB, tB0 + (tB1 - tB0) * prog, prog); // incoming
     if (captionB) drawCaption(ctx, W, H, captionB, prog);
-    onTick && onTick();
-    await sleep(1000 / fps);
+    await emit();
   }
 }
 
@@ -315,7 +321,7 @@ async function renderHoldKB(
   t0: number,
   t1: number,
   duration: number,
-  onTick: () => void,
+  emit: FrameEmitter,
   caption?: string,
 ): Promise<void> {
   if (duration <= 0) return;
@@ -328,8 +334,7 @@ async function renderHoldKB(
     ctx.fillRect(0, 0, W, H);
     drawKB(ctx, W, H, img, plan, t0 + (t1 - t0) * prog, 1);
     if (caption) drawCaption(ctx, W, H, caption, 1); // caption held fully on during the hold
-    onTick && onTick();
-    await sleep(1000 / fps);
+    await emit();
   }
 }
 
@@ -375,7 +380,7 @@ async function renderClip(
   clip: Clip,
   transSec: number,
   fit: 'cover' | 'contain',
-  onTick: () => void,
+  emit: FrameEmitter,
   audio?: ClipAudioBus,
 ): Promise<void> {
   const fps = 30;
@@ -468,7 +473,10 @@ async function renderClip(
   }
 
   // Real-time playback loop. Draw each frame; overlay a black veil that lifts
-  // over the first `fadeFrames` frames (fade-in from black).
+  // over the first `fadeFrames` frames (fade-in from black). NOTE: a clip plays
+  // in wall-clock time (the <video> advances in real time), so this loop stays
+  // real-time in BOTH engines — the WebCodecs emit must still pace itself here so
+  // it samples one canvas frame per real video frame rather than spinning.
   let frame = 0;
   while (!_cancelled && !video.ended && video.currentTime < endAt) {
     drawVideoFrame(ctx, W, H, video, fit);
@@ -480,8 +488,7 @@ async function renderClip(
       ctx.restore();
     }
     frame++;
-    onTick && onTick();
-    await sleep(1000 / fps);
+    await emit();
   }
   video.pause();
   restoreMusic(); // un-duck before the fade-out / next item
@@ -496,8 +503,7 @@ async function renderClip(
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
-      onTick && onTick();
-      await sleep(1000 / fps);
+      await emit();
     }
   }
 
@@ -510,6 +516,9 @@ export type ExportProgress = (pct: number, text: string) => void;
 export async function doExport(onProgress: ExportProgress): Promise<'done' | 'cancelled'> {
   const { settings, intro, outro, eventName } = useStore.getState();
   onProgress(0, 'Preparing canvas…');
+  // Keep the screen awake for the whole render so a sleeping display can't stall
+  // the real-time capture. No-op where unsupported; released at every exit below.
+  await acquireWakeLock();
 
   // Build the same shuffled/capped list the preview uses. The exported file
   // renders clips in real time (Phase 4) AND mixes their audio when unmuted
@@ -662,9 +671,18 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     onProgress(pct, `Rendering… ${Math.round(pct)}% (${fmtTime(elapsed)} of ~${fmtTime(totalDuration)})`);
   };
 
+  // Per-frame sink for the MediaRecorder engine: advance progress, then sleep one
+  // frame so the canvas captureStream is paced to real time. (Phase B swaps in a
+  // sink that grabs a VideoFrame and encodes it instead of sleeping.)
+  const FPS = 30;
+  const emit: FrameEmitter = async () => {
+    tick();
+    await sleep(1000 / FPS);
+  };
+
   // Intro
   if (intro.title && !_cancelled) {
-    await renderTextFrames(ctx, W, H, intro.title, intro.subtitle, intro.duration, tick, { titleStyle });
+    await renderTextFrames(ctx, W, H, intro.title, intro.subtitle, intro.duration, emit, { titleStyle });
   }
 
   // Walk the unified media list: photos cross-fade with continuous Ken Burns
@@ -683,9 +701,9 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     if (item.kind === 'clip') {
       // Cleanly close out a preceding photo so we don't jump-cut into the clip.
       if (prevImg && !prevWasClip) {
-        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration, prevCaption);
+        await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, settings.transitionDuration, emit, prevCaption);
       }
-      await renderClip(ctx, W, H, item, settings.transitionDuration, fit, tick, clipAudioBus);
+      await renderClip(ctx, W, H, item, settings.transitionDuration, fit, emit, clipAudioBus);
       prevWasClip = true;
       prevImg = null;
       prevPlan = null;
@@ -702,9 +720,9 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
     if (card) {
       // Fade the previous photo out, render the section card, then fade this
       // photo in from black (so the card reads as a clean chapter break).
-      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, prevCaption);
-      await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, tick, { titleStyle });
-      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick, caption);
+      if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, emit, prevCaption);
+      await renderTextFrames(ctx, W, H, card.title, card.subtitle, card.duration, emit, { titleStyle });
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, emit, caption);
     } else if (!firstItem && prevImg && !prevWasClip) {
       await renderCrossfadeKB(
         ctx,
@@ -718,16 +736,16 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
         0,
         transFrac, // incoming photo starts its motion
         settings.transitionDuration,
-        tick,
+        emit,
         prevCaption,
         caption,
       );
     } else {
       // First item overall, or the first photo coming out of a clip → fade in.
-      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, tick, caption);
+      await renderFadeInKB(ctx, W, H, img, plan, 0, transFrac, settings.transitionDuration, emit, caption);
     }
     // hold: continue this photo's motion from transFrac to 1.0
-    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, tick, caption);
+    await renderHoldKB(ctx, W, H, img, plan, transFrac, 1.0, effHold, emit, caption);
     prevPlan = plan;
     prevImg = img;
     prevCaption = caption;
@@ -739,14 +757,15 @@ export async function doExport(onProgress: ExportProgress): Promise<'done' | 'ca
   if (outro.title && !_cancelled) {
     // If the last visible item was a photo, fade it out first; coming out of a
     // clip we're already on black, so go straight to the title.
-    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, prevCaption);
-    await renderTextFrames(ctx, W, H, outro.title, outro.subtitle, outro.duration, tick, { titleStyle });
+    if (prevImg && !prevWasClip) await renderFadeOutKB(ctx, W, H, prevImg, prevPlan, 1.0, 0.8, emit, prevCaption);
+    await renderTextFrames(ctx, W, H, outro.title, outro.subtitle, outro.duration, emit, { titleStyle });
   }
 
   recorder.stop();
   await donePromise;
   audioCtx.close();
   _recorder = null;
+  await releaseWakeLock();
 
   if (_cancelled) {
     onProgress(0, 'Export cancelled.');
